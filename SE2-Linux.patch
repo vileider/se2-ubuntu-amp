@@ -1,0 +1,97 @@
+--- a/Y51_SE2Online/Y51_SE2Online/Dedicated/ServerPerf.cs
++++ b/Y51_SE2Online/Y51_SE2Online/Dedicated/ServerPerf.cs
+@@ -77,12 +77,13 @@
+ 		{
+ 			if (!ServerProfiler.Recording) ServerProfiler.StartRecording(System.IO.Path.Combine(config.Directory, "frametrace.jsonl"), GameLog.Instance);
+ 			JobProfiler.Install(harmony);
+-			new Thread(SampleSleep) { IsBackground = true, Name = "Y51_SE2Online sleep probe" }.Start();
++			if (OperatingSystem.IsWindows())
++				new Thread(SampleSleep) { IsBackground = true, Name = "Y51_SE2Online sleep probe" }.Start();
+ 		}
+ 		// Launch switches override server.json for A/B runs: -y51online:precisetimer:off|on, -y51online:looppriority:<level>.
+ 		bool precise = Arg(args, "precisetimer:") is { } p ? p != "off" : config.PreciseTimer;
+ 		string priority = Arg(args, "looppriority:") ?? config.LoopPriority;
+-		if (precise)
++		if (precise && OperatingSystem.IsWindows())
+ 		{
+ 			// Thread.Sleep wake-ups ran 10-60 ms late now and then on a lightly loaded host; this timer does not, and it
+ 			// needs no system-wide timer resolution (Windows 10 1803+; where it cannot be created, Thread.Sleep stays).
+@@ -220,12 +221,21 @@
+ 			if (NetSession.Current is { } net) foreach (var p in net.Players) if (p.Peer.HasValue) players++;
+ 			_players = players;
+ 		}
++		ServerProfiler.Json(FormattableString.Invariant(
++			$"{{\"t\":{frame.StartUnixMs},\"kind\":\"f\",\"ms\":{frame.FrameMs:0.00},\"busy\":{frame.FrameMs - wait:0.00},\"wait\":{wait:0.00},\"ahead\":{ServerProfiler.Ms(_traceAhead):0.00},\"ask\":{ServerProfiler.Ms(_traceAsk):0.00},\"slept\":{ServerProfiler.Ms(_traceSlept):0.00},\"spin\":{ServerProfiler.Ms(_traceSpin):0.00},\"late\":{ServerProfiler.Ms(_traceLate):0.00},\"tick\":{frame.TickMs:0.00},\"game\":{frame.GameMs:0.00},\"outside\":{frame.OutsideMs:0.00},\"ded\":{frame.SectionMs[(int)ServerSection.Dedicated]:0.00},\"online\":{frame.SectionMs[(int)ServerSection.Online]:0.00},\"gc0\":{frame.Gc0},\"gc1\":{frame.Gc1},\"gc2\":{frame.Gc2},\"gcp\":{frame.GcPauseMs:0.00},\"alloc\":{frame.AllocBytes},\"save\":{(frame.Saving ? 1 : 0)},\"pl\":{_players},{PlatformTraceFields()},\"jobs\":{ServerProfiler.Quote(jobs)}}}"));
++		_traceAhead = _traceAsk = _traceSlept = _traceSpin = _traceLate = 0;
++	}
++
++	private static string PlatformTraceFields()
++	{
++		if (!OperatingSystem.IsWindows())
++			return "\"sleep1\":null,\"cpu\":null,\"core\":null,\"sys\":null";
++
+ 		ulong cycles = Cycles();
+ 		double cpu = _traceCycles == 0 ? 0 : (cycles - (ulong)_traceCycles) / _cyclesPerMs;
+ 		_traceCycles = (long)cycles;
+-		ServerProfiler.Json(FormattableString.Invariant(
+-			$"{{\"t\":{frame.StartUnixMs},\"kind\":\"f\",\"ms\":{frame.FrameMs:0.00},\"busy\":{frame.FrameMs - wait:0.00},\"wait\":{wait:0.00},\"ahead\":{ServerProfiler.Ms(_traceAhead):0.00},\"ask\":{ServerProfiler.Ms(_traceAsk):0.00},\"slept\":{ServerProfiler.Ms(_traceSlept):0.00},\"spin\":{ServerProfiler.Ms(_traceSpin):0.00},\"late\":{ServerProfiler.Ms(_traceLate):0.00},\"tick\":{frame.TickMs:0.00},\"game\":{frame.GameMs:0.00},\"outside\":{frame.OutsideMs:0.00},\"ded\":{frame.SectionMs[(int)ServerSection.Dedicated]:0.00},\"online\":{frame.SectionMs[(int)ServerSection.Online]:0.00},\"gc0\":{frame.Gc0},\"gc1\":{frame.Gc1},\"gc2\":{frame.Gc2},\"gcp\":{frame.GcPauseMs:0.00},\"alloc\":{frame.AllocBytes},\"save\":{(frame.Saving ? 1 : 0)},\"pl\":{_players},\"sleep1\":{_sleep1Ms:0.00},\"cpu\":{cpu:0.00},\"core\":{Native.GetCurrentProcessorNumber()},\"sys\":{_sysLoad:0.00},\"jobs\":{ServerProfiler.Quote(jobs)}}}"));
+-		_traceAhead = _traceAsk = _traceSlept = _traceSpin = _traceLate = 0;
++		return FormattableString.Invariant(
++			$"\"sleep1\":{_sleep1Ms:0.00},\"cpu\":{cpu:0.00},\"core\":{Native.GetCurrentProcessorNumber()},\"sys\":{_sysLoad:0.00}");
+ 	}
+ 
+ 	/// <summary>Whether the closed frame's slowest jobs are wanted for the trace.</summary>
+--- a/Y51_SE2Online/Y51_SE2Online/Dedicated/HeadlessEngine.cs
++++ b/Y51_SE2Online/Y51_SE2Online/Dedicated/HeadlessEngine.cs
+@@ -162,9 +162,7 @@
+         Add(engine, "Game2.Simulation", "Keen.Game2.Simulation.GameSystems.Physicss.DefaultPhysicsSettingsComponent");
+         Extend(engine, "VRage.Physics", "Keen.VRage.Physics.Extensions.EngineBuilderExtensions", "AddPhysicsServer", (object)null);
+         Extend(engine, "VRage.AI", "Keen.VRage.AI.Extensions.EngineBuilderExtensions", "AddAI");
+-        Add(engine, "VRage.Platform.Windows", "Keen.VRage.Platform.Windows.EngineComponents.WinPlatformEngineComponent");
+-        Add(engine, "VRage.Platform.Windows", "Keen.VRage.Platform.Windows.EngineComponents.WinSystemEngineComponent");
+-        Add(engine, "VRage.Platform.Windows", "Keen.VRage.Platform.Windows.EngineComponents.WinMemoryEngineComponent");
++        AddHeadlessPlatform(engine, __instance);
+         engine.Add<WallTimeProviderComponent>(__instance.ApplicationLoop);
+         string maxPlayers = args.FirstOrDefault(a => a.StartsWith("-maxPlayers:", StringComparison.Ordinal));
+         if (maxPlayers != null && int.TryParse(maxPlayers.Substring("-maxPlayers:".Length), out int max) && max >= 1)
+@@ -333,6 +331,27 @@
+             || name.EndsWith("GameRenderComponent", StringComparison.Ordinal);
+     }
+ 
++    private static void AddHeadlessPlatform(EngineBuilder engine, GameApp app)
++    {
++        if (OperatingSystem.IsLinux())
++        {
++            // Pulsar may compile plugins in memory. Use the assembly of the active platform
++            // provider so these are the same component types that LinuxCompat indexed.
++            var provider = app.PlatformCore.Http?.GetType().Assembly;
++            var system = provider?.GetType("ClientPlugin.Platform.LinuxSystemEngineComponent");
++            var memory = provider?.GetType("ClientPlugin.Platform.LinuxMemoryEngineComponent");
++            if (system == null || memory == null)
++                throw new InvalidOperationException("Headless Linux requires the system and memory components from the active Pulsar LinuxCompat2 provider.");
++            engine.Add(new EntityBuilder.ComponentBuildInfo { Type = system });
++            engine.Add(new EntityBuilder.ComponentBuildInfo { Type = memory });
++            return;
++        }
++
++        Add(engine, "VRage.Platform.Windows", "Keen.VRage.Platform.Windows.EngineComponents.WinPlatformEngineComponent");
++        Add(engine, "VRage.Platform.Windows", "Keen.VRage.Platform.Windows.EngineComponents.WinSystemEngineComponent");
++        Add(engine, "VRage.Platform.Windows", "Keen.VRage.Platform.Windows.EngineComponents.WinMemoryEngineComponent");
++    }
++
+     private static Type Resolve(string assembly, string name) => Assembly.Load(assembly).GetType(name, true);
+ 
+     private static void Add(EngineBuilder engine, string assembly, string name) =>
+--- a/Y51_SE2Online/Properties/AssemblyInfo.cs
++++ b/Y51_SE2Online/Properties/AssemblyInfo.cs
+@@ -30,7 +30,9 @@
+ {
+ 	"Game2.ContentBuilder", "Game2.Game", "System.Collections.Immutable, Version=9.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a", "VRage.AI", "VRage.Analytics", "VRage.Animation.Client", "VRage.Audio", "VRage.Client.ContentBuilder", "VRage.Client",
+ 	"VRage.ContentPipeline.Builder.Plugin", "VRage.Core", "VRage.Core.Game", "VRage.DCS", "VRage.Game.Client", "VRage.Game", "VRage.Input", "VRage.Library", "VRage.Physics.Client", "VRage.Physics",
+-	"VRage.Platform.Windows", "VRage.Render", "VRage.Render12", "VRage.Scripting", "VRage.Steam", "VRage.UI", "VRage.UI.Shared", "VRage.Voxels.Client", "VRage.Voxels", "VRage.Water.Client",
++	// LinuxCompat2 recognizes the qualified platform name when it substitutes its Linux components.
++	"VRage.Platform.Windows, Culture=neutral",
++	"VRage.Render", "VRage.Render12", "VRage.Scripting", "VRage.Steam", "VRage.UI", "VRage.UI.Shared", "VRage.Voxels.Client", "VRage.Voxels", "VRage.Water.Client",
+ 	"VRage.Water", "Game2.Client", "Game2.Simulation", "SpaceEngineers2", "VRage.Multiplayer"
+ })]
+ [assembly: Bundle("Y51_SE2Online", "0.18.4.0")]

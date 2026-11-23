@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.zip
+*.tar.gz
+/SpaceEngineers2/
+/state/
+/profile/
+/home/
+/runtime/
+/Game2/
+/GameData/
+/VRage/
+/Plugin/
+*.dll
+*.so
+.env

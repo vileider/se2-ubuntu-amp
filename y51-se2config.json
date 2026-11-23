@@ -1,0 +1,78 @@
+[
+  {
+    "DisplayName": "Nazwa serwera",
+    "Category": "Serwer",
+    "FieldName": "SessionName",
+    "InputType": "text",
+    "DefaultValue": "SE2 Online Server",
+    "Description": "Nazwa sesji widoczna dla graczy.",
+    "IncludeInCommandLine": false
+  },
+  {
+    "DisplayName": "Hasło do gry",
+    "Category": "Serwer",
+    "FieldName": "ServerPassword",
+    "InputType": "password",
+    "DefaultValue": "",
+    "Description": "Puste pole zachowuje dotychczasowe hasło. Nowy profil bez hasła jest otwarty.",
+    "IncludeInCommandLine": false
+  },
+  {
+    "DisplayName": "Limit graczy",
+    "Category": "Serwer",
+    "FieldName": "$MaxUsers",
+    "InputType": "number",
+    "DefaultValue": "8",
+    "Description": "Y51 dopuszcza od 2 do 384 graczy.",
+    "IncludeInCommandLine": false,
+    "minValue": "2",
+    "maxValue": "384"
+  },
+  {
+    "DisplayName": "Widoczność w katalogu Y51",
+    "Category": "Serwer",
+    "FieldName": "Advertise",
+    "InputType": "checkbox",
+    "DefaultValue": "false",
+    "Description": "Publikuj sesję w katalogu Y51.",
+    "IncludeInCommandLine": false,
+    "EnumValues": {
+      "False": "false",
+      "True": "true"
+    }
+  },
+  {
+    "DisplayName": "Nazwa świata",
+    "Category": "Świat",
+    "FieldName": "WorldName",
+    "InputType": "text",
+    "DefaultValue": "SE2 World",
+    "Description": "Nazwa używana przy tworzeniu świata. Po pierwszym starcie zachowaj nazwę zapisu.",
+    "IncludeInCommandLine": false
+  },
+  {
+    "DisplayName": "Świat startowy",
+    "Category": "Świat",
+    "FieldName": "StartContent",
+    "InputType": "enum",
+    "DefaultValue": "EmptyWorld",
+    "Description": "Scenariusz dla nowego profilu.",
+    "IncludeInCommandLine": false,
+    "EnumValues": {
+      "EmptyWorld": "EmptyWorld",
+      "ClassicSurvival": "ClassicSurvival",
+      "Survival": "Survival"
+    }
+  },
+  {
+    "DisplayName": "Odstęp między zapisami",
+    "Category": "Świat",
+    "FieldName": "SaveInterval",
+    "InputType": "number",
+    "DefaultValue": "300",
+    "Description": "W sekundach. 0 wyłącza zapis okresowy. Dodatnia wartość musi wynosić co najmniej 30.",
+    "IncludeInCommandLine": false,
+    "minValue": "0",
+    "Suffix": "s"
+  }
+]

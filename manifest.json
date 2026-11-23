@@ -1,0 +1,11 @@
+{
+  "id": "e5c53940-6905-4984-afd3-deed66ffeef2",
+  "authors": [
+    "KNT"
+  ],
+  "origin": "vileider/se2-ubuntu-amp:main",
+  "url": "https://github.com/vileider/se2-ubuntu-amp",
+  "imagefile": "",
+  "prefix": "KNT",
+  "repotype": "AppTemplates"
+}
