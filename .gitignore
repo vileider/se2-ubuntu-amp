@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.zip
+!/updates/Y51-SE2Online-0.18.5-AMP.zip
 *.tar.gz
 /SpaceEngineers2/
 /state/

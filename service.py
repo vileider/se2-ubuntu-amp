@@ -64,6 +64,15 @@ def configure(root, game, query, settings):
                SaveIntervalSeconds=delay, EnableAutosave=delay > 0)
     cfg.setdefault("AutoUpdate", {})["Enabled"] = False
     network = cfg.setdefault("Network", {})
+    radius = settings.get("SE2_STREAMING_RADIUS_METERS", "").strip()
+    if radius:
+        try:
+            metres = int(radius)
+        except ValueError:
+            raise ValueError("Podaj promień synchronizacji w pełnych metrach.") from None
+        if metres != 0 and not 1000 <= metres <= 1_000_000:
+            raise ValueError("Promień synchronizacji musi wynosić 0 lub od 1000 do 1000000 metrów.")
+        network["StreamingRadiusMeters"] = metres
     network.update(SessionName=session, Password=password or network.get("Password", ""), MaxPlayers=players,
                                          Advertise=advertise == "true", AllowDirectIp=True,
                                          ListenPort=game, BindAddress="0.0.0.0")

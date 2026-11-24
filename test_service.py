@@ -43,10 +43,21 @@ class TemplateTests(unittest.TestCase):
             scenario.mkdir(parents=True)
             (scenario / "savegame.vrb").touch()
             config = service.configure(root, *ports, dict(defaults, SE2_PASSWORD="private pass"))
+            self.assertEqual(defaults["SE2_STREAMING_RADIUS_METERS"], "")
+            self.assertNotIn("StreamingRadiusMeters", service.read_json(config)["Network"])
+            for value in ("1000", "1000000", "0", "5000"):
+                service.configure(root, *ports, dict(defaults, SE2_STREAMING_RADIUS_METERS=value))
+                self.assertEqual(service.read_json(config)["Network"]["StreamingRadiusMeters"], int(value))
+            before = config.read_bytes()
+            for invalid in ("999", "1000001", "-1", "5km"):
+                with self.assertRaises(ValueError):
+                    service.configure(root, *ports, dict(defaults, SE2_STREAMING_RADIUS_METERS=invalid))
+                self.assertEqual(config.read_bytes(), before)
             state = {"SaveId": "SE2 World 1", "WorldName": "SE2 World", "SourceContent": "EmptyWorld"}
             (config.parent / "dedicated-state.json").write_text(json.dumps(state))
             service.configure(root, *ports, defaults)
             net = service.read_json(config)["Network"]
+            self.assertEqual(net["StreamingRadiusMeters"], 5000)
             self.assertEqual((net["SessionName"], net["ListenPort"], net["Password"], net["MaxPlayers"]),
                              ("SE2 Online Server", 27016, "private pass", 8))
             for args in [(27016, 27018, defaults), (*ports, dict(defaults, SE2_WORLD_NAME="Other"))]:

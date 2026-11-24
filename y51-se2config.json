@@ -29,6 +29,16 @@
     "maxValue": "384"
   },
   {
+    "DisplayName": "Promień synchronizacji",
+    "Category": "Serwer",
+    "FieldName": "StreamingRadiusMeters",
+    "InputType": "text",
+    "DefaultValue": "",
+    "Suffix": "m",
+    "Description": "Puste pole zachowuje promień z server.json. 0 synchronizuje cały świat. Wpisz od 1000 do 1000000 metrów, np. 5000. Zmiana działa po ponownym uruchomieniu gry.",
+    "IncludeInCommandLine": false
+  },
+  {
     "DisplayName": "Widoczność w katalogu Y51",
     "Category": "Serwer",
     "FieldName": "Advertise",

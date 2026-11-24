@@ -13,6 +13,7 @@ import zipfile
 
 PROJECT = Path(__file__).resolve().parent
 SOURCE_HASH = "16566ffa06dd189b41b4835c48f1654b8ff4238b96923e28b4aac1bbb539b96d"
+Y51_COMMIT = "8f2ccbe713f54ae894496ef34f2975dfa03a301f"
 ENGINE_HASH = "1e20004a1f45ea650f667e34b09ae7446bbdc1dc53de3c6ff11bf8bb7f5c601a"
 SDK = "mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:bef136a371963aaa46ec97882845ef6f54dec15728bb4b128b1c2a400ffbc9b4"
 COMPAT_COMMIT = "f713880a05e1ffad2d6b489a6c1bc3c36103e030"
@@ -39,18 +40,25 @@ def extract_release(url, archive, expected, target):
 
 
 def prepare_sources(source_zip, target):
-    verify(source_zip, SOURCE_HASH)
-    with zipfile.ZipFile(source_zip) as z:
-        z.extractall(target)
+    subprocess.run(["git", "init", "-q", str(target)], check=True)
+    if source_zip is None:
+        subprocess.run(["git", "-C", str(target), "fetch", "--depth=1",
+                        "https://github.com/yellow5111/SE2Online.git", Y51_COMMIT], check=True)
+        subprocess.run(["git", "-C", str(target), "checkout", "--detach", Y51_COMMIT], check=True)
+    else:
+        # Keep the original three-argument invocation for hosts rebuilding 0.18.4.
+        verify(source_zip, SOURCE_HASH)
+        with zipfile.ZipFile(source_zip) as z:
+            z.extractall(target)
     patch = PROJECT / "SE2-Linux.patch"
     # Upstream ships CRLF. Normalize just the three patched files before git apply.
     for line in patch.read_text(encoding="utf-8").splitlines():
         if line.startswith("--- a/"):
             p = target / line[6:]
             p.write_bytes(p.read_bytes().replace(b"\r\n", b"\n"))
-    subprocess.run(["git", "init", "-q", str(target)], check=True)
-    subprocess.run(["git", "apply", "--check", str(patch)], cwd=target, check=True)
-    subprocess.run(["git", "apply", str(patch)], cwd=target, check=True)
+    apply = ["git", "-c", "core.autocrlf=false", "apply"]
+    subprocess.run([*apply, "--check", str(patch)], cwd=target, check=True)
+    subprocess.run([*apply, str(patch)], cwd=target, check=True)
 
 
 def verify_standalone(package):
@@ -135,17 +143,18 @@ def stage(source, standalone, dest, docker):
         shutil.copy2(runtime / "SE2-Licenses.txt", out / "SE2-Licenses.txt")
         subprocess.run([*docker, "run", "--rm", "--network", "none", "--user", f"{os.getuid()}:{os.getgid()}",
                         "--entrypoint", "/usr/bin/python3", "-v", f"{out}:/instance:ro", "-w", "/instance",
-                        "local/se2-y51-amp:0.18.4", "-B", "/opt/se2-amp/service.py", "--check"], check=True)
+                        "local/se2-y51-amp:0.18.4-r2", "-B", "/opt/se2-amp/service.py", "--check"], check=True)
         out.rename(dest)
     print(f"Prepared {dest}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source_zip", type=Path)
+    parser.add_argument("source_zip", type=Path, nargs="?",
+                        help="Legacy build only: supply the original 0.18.4 source ZIP to build 0.18.4")
     parser.add_argument("standalone", type=Path, help="Extracted standalone.1 directory containing runtime/")
     parser.add_argument("destination", type=Path, help="New private instance directory outside this repository")
     parser.add_argument("--sudo-docker", action="store_true", help="Run only the Docker commands using sudo")
     args = parser.parse_args()
-    stage(args.source_zip.resolve(), args.standalone.resolve(), args.destination.resolve(),
+    stage(args.source_zip.resolve() if args.source_zip else None, args.standalone.resolve(), args.destination.resolve(),
           ["sudo", "docker"] if args.sudo_docker else ["docker"])

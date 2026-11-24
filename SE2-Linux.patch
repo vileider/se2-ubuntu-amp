@@ -84,7 +84,7 @@
      private static void Add(EngineBuilder engine, string assembly, string name) =>
 --- a/Y51_SE2Online/Properties/AssemblyInfo.cs
 +++ b/Y51_SE2Online/Properties/AssemblyInfo.cs
-@@ -30,7 +30,9 @@
+@@ -30,6 +30,8 @@
  {
  	"Game2.ContentBuilder", "Game2.Game", "System.Collections.Immutable, Version=9.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a", "VRage.AI", "VRage.Analytics", "VRage.Animation.Client", "VRage.Audio", "VRage.Client.ContentBuilder", "VRage.Client",
  	"VRage.ContentPipeline.Builder.Plugin", "VRage.Core", "VRage.Core.Game", "VRage.DCS", "VRage.Game.Client", "VRage.Game", "VRage.Input", "VRage.Library", "VRage.Physics.Client", "VRage.Physics",
@@ -94,4 +94,3 @@
 +	"VRage.Render", "VRage.Render12", "VRage.Scripting", "VRage.Steam", "VRage.UI", "VRage.UI.Shared", "VRage.Voxels.Client", "VRage.Voxels", "VRage.Water.Client",
  	"VRage.Water", "Game2.Client", "Game2.Simulation", "SpaceEngineers2", "VRage.Multiplayer"
  })]
- [assembly: Bundle("Y51_SE2Online", "0.18.4.0")]
