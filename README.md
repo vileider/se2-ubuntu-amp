@@ -35,6 +35,16 @@ In ADS, add `vileider/se2-ubuntu-amp:main` to **Configuration Repositories** and
 
 Then click **Update** on the instance tile in ADS to apply the template. Use **Status → Update** inside the instance for subsequent plugin updates.
 
+### Existing instance still reports that updates are unsupported
+
+If the public template has update stages but the instance's `GenericModule.kvp` still contains `App.UpdateSources=[]`, stop the game from its AMP panel and wait for the final save. Select **Fetch Latest** in ADS to download the helper. For a standard ADS01 installation, run this on the Ubuntu host, replacing `MySE201` with the instance directory name.
+
+```bash
+sudo -iu amp python3 /home/amp/.ampdata/instances/ADS01/Plugins/ADSModule/DeploymentTemplates/vileider-se2-ubuntu-amp-main/enable-panel-update.py MySE201
+```
+
+The helper backs up `GenericModule.kvp` next to the original. It copies the two update stages into the existing instance while its panel is stopped. If the panel was running, the helper restarts it and checks the stages inside the container. After `SE2_UPDATE_STAGES_OK (container)`, open the game instance and click **Status → Update**. If the check reports `offline instance`, start the instance in ADS first.
+
 ### Publishing the next compatible plugin
 
 For a DLL-only update compatible with the same runtime and content, commit the versioned ZIP under `updates/` and update the version and both package hashes in `updates/stable-4.0.0.3169.json` together. ZIPs contain the patched DLL and upstream license. Each click checks this channel. Changes that need new engine binaries, content or dependencies require a separate migration.
