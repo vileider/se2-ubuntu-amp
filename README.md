@@ -10,7 +10,36 @@ The original deployment hosted a world in Docker, accepted an in-game LAN connec
 - A standalone server with the SE2 **4.0.0.3169** runtime from yellow51. An existing extracted 0.18.4-standalone.1 runtime works for this build. For a new download, sign in with Steam and extract 0.18.5-standalone.1 into a private directory. The build script fetches the pinned public Y51 source. [Y51 downloads](https://se2-online.yellow51.dev/#downloads)
 - Internet access for the initial build and Steam networking. Game files, credentials and saves stay on the host. Allow enough free space for the extracted standalone, a second instance copy, build files and Docker layers.
 
-## Upgrade an existing 0.18.4 instance using AMP
+## Update the plugin from the AMP panel
+
+With the public template, select **Fetch Latest** in ADS once, then use **Update** on the instance tile to load its new template. For an installation created from the original local template, apply the migration below first. The existing runtime image already includes Python.
+
+When you want to install an update, stop the game in AMP and wait for the final save. Inside that game instance, click **Status → Update**, then **Start** when the update task completes. Look for `SE2_HOSTING_READY` and join with the matching Y51 client. Repeating **Update** on the installed release reports its version and keeps the previous backup.
+
+The update checks the engine and package hashes and replaces `Plugin/Y51_SE2Online.dll`. To roll back, stop the game and restore `Plugin/Y51_SE2Online.dll.previous` under the original DLL name. Match the client version to the restored plugin.
+
+### One-time setup for the original LOCAL/KntSE2 template
+
+In ADS, add `vileider/se2-ubuntu-amp:main` to **Configuration Repositories** and select **Fetch Latest**. On the host, run the following commands for a default ADS01 installation. They copy just the button definition into the template used by the existing instance.
+
+```bash
+(
+  set -eu
+  templates=/home/amp/.ampdata/instances/ADS01/Plugins/ADSModule/DeploymentTemplates
+  local_template="$templates/LOCAL-KntSE2-main"
+  sudo -u amp install -m 644 "$templates/vileider-se2-ubuntu-amp-main/y51-se2updates.json" "$local_template/y51-se2updates.json"
+  sudo -u amp sed -i 's/^App\.UpdateSources=\[\]\r\?$/App.UpdateSources=@IncludeJson[y51-se2updates.json]/' "$local_template/y51-se2.kvp"
+  sudo -u amp grep -Fx 'App.UpdateSources=@IncludeJson[y51-se2updates.json]' "$local_template/y51-se2.kvp"
+)
+```
+
+Then click **Update** on the instance tile in ADS to apply the template. Use **Status → Update** inside the instance for subsequent plugin updates.
+
+### Publishing the next compatible plugin
+
+For a DLL-only update compatible with the same runtime and content, commit the versioned ZIP under `updates/` and update the version and both package hashes in `updates/stable-4.0.0.3169.json` together. ZIPs contain the patched DLL and upstream license. Each click checks this channel. Changes that need new engine binaries, content or dependencies require a separate migration.
+
+### File Manager fallback for 0.18.4
 
 1. Download and unzip [Y51-SE2Online-0.18.5-AMP.zip](updates/Y51-SE2Online-0.18.5-AMP.zip) on your PC. It contains the Linux-patched DLL and the upstream license. The DLL's SHA-256 is `743c11fe1695815ca8619e6430876ebf9d4574aba8eca97b63a9f2447b8ef69b`.
 2. Click **Stop** in the game instance and wait for the final save. In **File Manager**, open the existing `SpaceEngineers2/Plugin` folder (or `Plugin` if the file manager opens inside the game directory). Rename `Y51_SE2Online.dll` to `Y51_SE2Online.dll.0.18.4.bak`, then upload the extracted `Y51_SE2Online.dll` into that same folder.

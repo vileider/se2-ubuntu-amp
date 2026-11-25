@@ -1,0 +1,20 @@
+[
+  {
+    "UpdateStageName": "Download the Y51 plugin updater",
+    "UpdateSourcePlatform": "Linux",
+    "UpdateSource": "FetchURL",
+    "UpdateSourceData": "https://raw.githubusercontent.com/vileider/se2-ubuntu-amp/9eb1cd5dd5ede09b8b016adaf180557329def263/update_plugin.py",
+    "UpdateSourceTarget": "{{$FullBaseDir}}",
+    "UpdateSourceArgs": "update_plugin.py",
+    "OverwriteExistingFiles": true,
+    "SkipOnFailure": false
+  },
+  {
+    "UpdateStageName": "Check and install the compatible Y51 plugin",
+    "UpdateSourcePlatform": "Linux",
+    "UpdateSource": "Executable",
+    "UpdateSourceData": "/usr/bin/python3",
+    "UpdateSourceArgs": "-I \"{{$FullBaseDir}}update_plugin.py\" \"{{$FullBaseDir}}.\"",
+    "SkipOnFailure": false
+  }
+]
