@@ -203,6 +203,10 @@ def supervise(child, state_dir, commands, console_offset):
 
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--check-addons":
+        rows = panel_addons.check(Path(sys.argv[2]).resolve(), force=True)
+        panel_addons.notice(f"Sprawdzono listę ({len(rows)}). Gotowa do startu gry.")
+        return 0
     root = Path.cwd()
     check_files(root)
     if sys.argv[1:] == ["--check"]:

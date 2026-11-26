@@ -236,11 +236,3 @@ def pulsar_profile(root, rows):
     atomic(target, ET.tostring(profile, encoding="utf-8", xml_declaration=True))
     return target
 
-
-if __name__ == "__main__":
-    import sys
-    try:
-        rows = check(Path(sys.argv[1]).resolve(), force=True)
-        notice(f"Sprawdzono listę ({len(rows)}). Gotowa do startu gry.")
-    except (ValueError, KeyError, OSError, ET.ParseError, zipfile.BadZipFile) as exc:
-        sys.exit(f"[Dodatki AMP] Błąd: {exc}")
