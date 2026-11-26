@@ -3,7 +3,7 @@
   "authors": [
     "KNT"
   ],
-  "origin": "vileider/se2-ubuntu-amp:main",
+  "origin": "https://github.com/vileider/se2-ubuntu-amp.git",
   "url": "https://github.com/vileider/se2-ubuntu-amp",
   "imagefile": "",
   "prefix": "KNT",
