@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "ConfigFile": "amp-world-save.kvp",
+    "ConfigType": "kvp",
+    "ConfigFormat": "{0}={1}",
+    "Subsections": [
+      {
+        "Heading": "$root",
+        "SettingMappings": {
+          "WorldSaveRequest": "WorldSaveRequest"
+        }
+      }
+    ]
+  }
+]

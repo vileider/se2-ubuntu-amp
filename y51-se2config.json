@@ -75,6 +75,20 @@
     }
   },
   {
+    "DisplayName": "Zapisz świat teraz",
+    "Category": "Świat",
+    "FieldName": "WorldSaveRequest",
+    "ParamFieldName": "WorldSaveRequest",
+    "InputType": "checkbox",
+    "DefaultValue": "false",
+    "Description": "Podczas gry kliknij raz, w dowolną stronę. Poczekaj na komunikat „Zapisano świat” w konsoli przed kolejnym zapisem.",
+    "IncludeInCommandLine": false,
+    "EnumValues": {
+      "False": "false",
+      "True": "true"
+    }
+  },
+  {
     "DisplayName": "Odstęp między zapisami",
     "Category": "Świat",
     "FieldName": "SaveInterval",

@@ -37,20 +37,20 @@ class AddonTests(unittest.TestCase):
         cfg = json.loads((ROOT / "y51-se2config.json").read_bytes())
         self.assertEqual(next(row["Special"] for row in cfg if row["FieldName"] == "PanelAddons"),
                          f"listfile:./SpaceEngineers2/{addons.LIST}")
-        with zipfile.ZipFile(ROOT / "updates/se2-panel-v1.pyz") as z:
+        with zipfile.ZipFile(ROOT / "updates/se2-panel-v2.pyz") as z:
             for name, source in [("__main__.py", "service.py"), ("panel_addons.py", "panel_addons.py")]:
                 self.assertEqual(z.read(name), (ROOT / source).read_bytes())
         with tempfile.TemporaryDirectory() as tmp:
-            output = subprocess.check_output([sys.executable, "-I", str(ROOT / "updates/se2-panel-v1.pyz"),
+            output = subprocess.check_output([sys.executable, "-I", str(ROOT / "updates/se2-panel-v2.pyz"),
                                               "--check-addons", tmp], text=True)
             self.assertIn("Sprawdzono listę (0)", output)
 
     def test_amp_start_validates_pinned_artifact_and_update_only_handles_y51(self):
         kvp = (ROOT / "y51-se2.kvp").read_text()
         self.assertIn("App.PreStartStages=@IncludeJson[y51-se2start.json]", kvp)
-        self.assertIn("App.CommandLineArgs=-I -u ./se2-panel-v1.pyz ", kvp)
+        self.assertIn("App.CommandLineArgs=-I -u ./se2-panel-v2.pyz ", kvp)
         stages = json.loads((ROOT / "y51-se2start.json").read_bytes())
-        self.assertRegex(stages[0]["UpdateSourceData"], r"/[0-9a-f]{40}/updates/se2-panel-v1[.]pyz$")
+        self.assertRegex(stages[0]["UpdateSourceData"], r"/[0-9a-f]{40}/updates/se2-panel-v2[.]pyz$")
         update = json.loads((ROOT / "y51-se2updates.json").read_bytes())
         self.assertEqual([item["UpdateSource"] for item in update], ["FetchURL", "Executable"])
         with tempfile.TemporaryDirectory(prefix="amp path ") as tmp:
