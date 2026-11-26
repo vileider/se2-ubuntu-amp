@@ -10,6 +10,16 @@ The original deployment hosted a world in Docker, accepted an in-game LAN connec
 - A standalone server with the SE2 **4.0.0.3169** runtime from yellow51. An existing extracted 0.18.4-standalone.1 runtime works for this build. For a new download, sign in with Steam and extract 0.18.5-standalone.1 into a private directory. The build script fetches the pinned public Y51 source. [Y51 downloads](https://se2-online.yellow51.dev/#downloads)
 - Internet access for the initial build and Steam networking. Game files, credentials and saves stay on the host. Allow enough free space for the extracted standalone, a second instance copy, build files and Docker layers.
 
+## Add mods and plugins from AMP
+
+For an existing instance using the public template, save and stop the game. In ADS choose **Configuration → Instance Deployment → Fetch Latest**, then right-click the SE2 instance and choose **Refresh Configuration**. Open the instance and start the game. On first start AMP stages the Python add-on manager and checks its SHA-256. This feature works with the existing Linux image. **Status → Update** inside SE2 continues to update the Y51 game plugin.
+
+1. Open **Configuration → Dodatki → Mody Steam i pluginy GitHub**. Click **+**, paste a Steam Workshop mod link or item ID, or the GitHub repository URL for a plugin in Pulsar's **PluginHub-SE2**. Save the list. Remove an entry with the list's delete control.
+2. With the game running, open **Console**. The manager checks the saved list and reports the title as soon as the source answers, or explains the failure. With the game stopped the check runs at startup. **Znaleziono** confirms the catalog entry. Linux headless compatibility still depends on the plugin. Private items, blueprints, Workshop collections, Windows-only plugins and arbitrary GitHub repositories are outside this manager's supported inputs.
+3. Restart the game when ready. Y51 downloads Workshop mods and reports world mods through the existing **mods** console command. For GitHub entries, Pulsar uses the selected PluginHub IDs in a copy of the current profile. Its loader reports enabled plugins, initialization counts and errors to the AMP console. A GitHub plugin that adds client UI may also need installing on each player's PC.
+
+The list manages its own selections. Existing manual settings and the original Pulsar profile are preserved. Y51 also loads mods embedded in a world save, so removing a Workshop entry from the panel alone may leave that mod active in an existing world.
+
 ## Update the plugin from the AMP panel
 
 With the public template, select **Fetch Latest** in ADS once, then use **Update** on the instance tile to load its new template. For an installation created from the original local template, apply the migration below first. The existing runtime image already includes Python.

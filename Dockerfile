@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY --from=dotnet /usr/share/dotnet/ /opt/se2-amp/dotnet/
 COPY --from=steam /redist/linux64/ /opt/se2-steam/sdk64/
-COPY service.py /opt/se2-amp/service.py
+COPY service.py panel_addons.py /opt/se2-amp/
 RUN /opt/se2-amp/dotnet/dotnet --list-runtimes | grep '^Microsoft.NETCore.App 10\.' \
     && test -s /opt/se2-steam/sdk64/steamclient.so && python3 -m py_compile /opt/se2-amp/service.py
 ENTRYPOINT ["/ampstart.sh"]

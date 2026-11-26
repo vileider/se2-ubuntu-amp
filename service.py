@@ -10,6 +10,8 @@ import tempfile
 import threading
 import time
 
+import panel_addons
+
 
 def read_json(path):
     return json.loads(path.read_text(encoding="utf-8-sig"))
@@ -30,7 +32,7 @@ def check_files(root):
         raise ValueError("Nadaj prawo wykonania plikowi pulsar/Modern.bin.")
 
 
-def configure(root, game, query, settings):
+def configure(root, game, query, settings, addons=()):
     if not 1 <= game < 65535 or query != game + 1:
         raise ValueError("W ustawieniach portów AMP ustaw Steam query na port gry + 1.")
     session = settings["SE2_SESSION_NAME"].strip()
@@ -76,13 +78,19 @@ def configure(root, game, query, settings):
     network.update(SessionName=session, Password=password or network.get("Password", ""), MaxPlayers=players,
                                          Advertise=advertise == "true", AllowDirectIp=True,
                                          ListenPort=game, BindAddress="0.0.0.0")
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=state_dir, delete=False) as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-    os.replace(f.name, path)
+    ledger = state_dir / "amp-workshop-owned.json"
+    previous_ids = read_json(ledger) if ledger.exists() else []
+    owned = panel_addons.apply_mods(cfg, addons, previous_ids)
+    if owned != previous_ids:
+        # A retry must recognise both generations if the process stops between replacements.
+        panel_addons.atomic(ledger, json.dumps(sorted(set(previous_ids + owned))).encode())
+    panel_addons.atomic(path, json.dumps(cfg, ensure_ascii=False, indent=2).encode())
+    if owned != previous_ids:
+        panel_addons.atomic(ledger, json.dumps(owned).encode())
     return path
 
 
-def launch(root, config):
+def launch(root, config, plugin_profile=None):
     profile, home = root / "profile", root / "home"
     profile.mkdir(exist_ok=True)
     steam = home / ".steam"
@@ -99,6 +107,8 @@ def launch(root, config):
             "-noPillars", "-localDedicatedServer", f"-appData:{profile}",
             f"-plugins:{root / 'Plugin/Y51_SE2Online.dll'}", f"-y51dedicated:{config}",
             "-y51headless", "-hiddenWindow"]
+    if plugin_profile is not None:
+        args.extend(["-profile", str(plugin_profile)])
     return subprocess.Popen(args, cwd=root / "Game2", env=env, stdin=subprocess.DEVNULL)
 
 
@@ -193,6 +203,10 @@ def supervise(child, state_dir, commands, console_offset):
 
 
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--check-addons":
+        rows = panel_addons.check(Path(sys.argv[2]).resolve(), force=True)
+        panel_addons.notice(f"Sprawdzono listę ({len(rows)}). Gotowa do startu gry.")
+        return 0
     root = Path.cwd()
     check_files(root)
     if sys.argv[1:] == ["--check"]:
@@ -203,7 +217,11 @@ def main():
     state_dir.mkdir(exist_ok=True)
     with (state_dir / ".amp.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        config = configure(root, int(sys.argv[1]), int(sys.argv[2]), os.environ)
+        listfile = root / panel_addons.LIST
+        stamp = listfile.read_bytes() if listfile.is_file() else b""
+        addons = panel_addons.check(root)
+        plugin_profile = panel_addons.pulsar_profile(root, addons)
+        config = configure(root, int(sys.argv[1]), int(sys.argv[2]), os.environ, addons)
         for name in ("dedicated-command.txt", "dedicated-status.json"):
             p = state_dir / name
             if p.exists():
@@ -217,7 +235,11 @@ def main():
                     commands.put(line.strip())
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda *_: commands.put("stop now"))
-        child = launch(root, config)
+        read_pulsar = panel_addons.pulsar_log(root) if plugin_profile else None
+        child = launch(root, config, plugin_profile)
+        if read_pulsar:
+            threading.Thread(target=read_pulsar, daemon=True).start()
+        threading.Thread(target=panel_addons.live_preview, args=(root, stamp), daemon=True).start()
         threading.Thread(target=read_stdin, daemon=True).start()
         return supervise(child, state_dir, commands, offset)
 
@@ -225,5 +247,5 @@ def main():
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (OSError, ValueError, KeyError, IndexError) as exc:
+    except (OSError, ValueError, KeyError, IndexError, panel_addons.ET.ParseError, panel_addons.zipfile.BadZipFile) as exc:
         sys.exit(f"SE2 AMP: {exc}")
