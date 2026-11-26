@@ -1,0 +1,20 @@
+[
+  {
+    "UpdateStageName": "Prepare the AMP add-on manager",
+    "UpdateSourcePlatform": "Linux",
+    "UpdateSource": "FetchURL",
+    "UpdateSourceData": "https://raw.githubusercontent.com/vileider/se2-ubuntu-amp/a29dcef5aebad010ff686fa5f847b52168027144/updates/se2-panel-v1.pyz",
+    "UpdateSourceTarget": "{{$FullBaseDir}}",
+    "UpdateSourceArgs": "se2-panel-v1.pyz",
+    "OverwriteExistingFiles": false,
+    "SkipOnFailure": false
+  },
+  {
+    "UpdateStageName": "Verify the AMP add-on manager",
+    "UpdateSourcePlatform": "Linux",
+    "UpdateSource": "Executable",
+    "UpdateSourceData": "/usr/bin/python3",
+    "UpdateSourceArgs": "-I -c \"import hashlib,pathlib,sys; sys.exit(0 if hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest() == '93d29cc1071a043ced3dbdc7ee9c04932d2fd93fece00479eae3fb9dafb06ab0' else 'Invalid se2-panel-v1.pyz. Remove the damaged file in AMP File Manager and start again.')\" \"{{$FullBaseDir}}se2-panel-v1.pyz\"",
+    "SkipOnFailure": false
+  }
+]

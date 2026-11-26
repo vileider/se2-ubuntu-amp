@@ -94,6 +94,7 @@ def stage(source, standalone, dest, docker):
         work = Path(tmp)
         out = work / "instance"
         out.mkdir()
+        shutil.copy2(PROJECT / "updates/se2-panel-v1.pyz", out / "se2-panel-v1.pyz")
         y51 = work / "y51"
         prepare_sources(source, y51)
         build(docker, y51, runtime / "Game2", "Y51_SE2Online/Y51_SE2Online.csproj", "SE2Bin")
@@ -143,7 +144,7 @@ def stage(source, standalone, dest, docker):
         shutil.copy2(runtime / "SE2-Licenses.txt", out / "SE2-Licenses.txt")
         subprocess.run([*docker, "run", "--rm", "--network", "none", "--user", f"{os.getuid()}:{os.getgid()}",
                         "--entrypoint", "/usr/bin/python3", "-v", f"{out}:/instance:ro", "-w", "/instance",
-                        "local/se2-y51-amp:0.18.4-r2", "-B", "/opt/se2-amp/service.py", "--check"], check=True)
+                        "local/se2-y51-amp:0.18.4-r2", "-B", "/instance/se2-panel-v1.pyz", "--check"], check=True)
         out.rename(dest)
     print(f"Prepared {dest}")
 

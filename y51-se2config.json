@@ -84,5 +84,15 @@
     "IncludeInCommandLine": false,
     "minValue": "0",
     "Suffix": "s"
+  },
+  {
+    "DisplayName": "Mody Steam i pluginy GitHub",
+    "Category": "Dodatki",
+    "Description": "Kliknij + i wklej ID lub link do moda Steam Workshop dla SE2 albo adres repozytorium z Pulsar PluginHub-SE2. Konsola działającej gry pokaże znalezioną nazwę. Gdy gra jest zatrzymana, sprawdzenie nastąpi przy starcie. Zmiany działają przy następnym starcie gry.",
+    "FieldName": "PanelAddons",
+    "InputType": "list",
+    "Special": "listfile:./SpaceEngineers2/amp-addons.txt",
+    "DefaultValue": "",
+    "IncludeInCommandLine": false
   }
 ]
