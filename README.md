@@ -30,6 +30,26 @@ The helper backs up changed panel files in the reported directory and checks the
 
 The list manages its own selections. Existing manual settings and the original Pulsar profile are preserved. Y51 also loads mods embedded in a world save, so removing a Workshop entry from the panel alone may leave that mod active in an existing world.
 
+## Recover a contract from the AMP console
+
+This optional server-side build targets Y51 0.18.5 with SE2 4.0.0.3169. The installer needs the existing instance, Git and access to the Docker daemon as the AMP service user. It compiles against the game's local assemblies with the pinned SDK. Clients can keep Y51 0.18.5.
+
+Stop the game in AMP and wait for its final save. With the template installed in ADS01, run the following on the Ubuntu host as root. Substitute your AMP instance name for `MySE201`.
+
+```sh
+sudo -iu amp bash -c 'cd ~/.ampdata/instances/ADS01/Plugins/ADSModule/DeploymentTemplates/vileider-se2-ubuntu-amp-main && git pull --ff-only origin main && python3 install-contract-admin.py MySE201'
+```
+
+After `SE2_CONTRACT_ADMIN_OK`, start the game. Use the server's **Console**. These commands also work for a previously seen offline player whose identity exists in this world.
+
+- `contract list BiKey beacon` lists matching IDs, names, sectors and states. Use `contract list BiKey` to see every contract when the host uses another language.
+- `contract complete BiKey <ID>` completes the selected contract and requests a world save. Replace `<ID>` with a listed number. A unique matching contract name also works. For nicknames containing spaces use the player's SteamID64.
+- Wait for the confirmation **Zapisano świat po ukończeniu**. Repeating the same command for a completed record leaves the rewards alone.
+
+Completion uses the game's terminal reward operation, including credits, physical items, block unlocks and sector progression as defined by that contract. In faction mode the native reward can reach multiple faction members. Check which contract was previously finished before using this on a rollback. Past payouts missing from the recovered contract history cannot be detected. The command requires a loaded issuing terminal and refuses ambiguous contracts, mixed progress within the group, conflicts with another active group, global contract sharing and repeatable contracts.
+
+The normal **Status → Update** button selects the published stable Y51 DLL. To keep using these opt-in commands after a standard update, rerun the same installer with the game stopped. Reinstalls of the same build use the cached DLL. To switch back explicitly, add `--restore` to the installer command.
+
 ## Update the plugin from the AMP panel
 
 With the public template, select **Fetch Latest** in ADS once, then use **Update** on the instance tile to load its new template. For an installation created from the original local template, apply the migration below first. The existing runtime image already includes Python.

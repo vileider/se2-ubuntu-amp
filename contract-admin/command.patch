@@ -1,0 +1,10 @@
+diff --git a/Y51_SE2Online/Y51_SE2Online/Dedicated/DedicatedRuntime.cs b/Y51_SE2Online/Y51_SE2Online/Dedicated/DedicatedRuntime.cs
+--- a/Y51_SE2Online/Y51_SE2Online/Dedicated/DedicatedRuntime.cs
++++ b/Y51_SE2Online/Y51_SE2Online/Dedicated/DedicatedRuntime.cs
+@@ -570,5 +570,6 @@ internal static class DedicatedRuntime
+     {
+         StartCommandPoll();
+         if (Busy || !Commands.TryDequeue(out string command)) return;
++        if (ContractAdmin.TryRun(command)) return;
+         RunCommand(app, command);
+     }
