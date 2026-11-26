@@ -134,10 +134,26 @@ def safe_line(value):
     return " ".join(str(value).splitlines()).strip()
 
 
+def save_switch(path):
+    """Ignore missing or partial settings while AMP rewrites the KVP."""
+    try:
+        content = path.read_text(encoding="utf-8-sig")
+    except (FileNotFoundError, UnicodeError):
+        return None
+    for line in content.splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() == "WorldSaveRequest":
+            return {"true": True, "false": False}.get(value.strip().lower())
+    return None
+
+
 def supervise(child, state_dir, commands, console_offset):
     status_file = state_dir / "dedicated-status.json"
     console_file = state_dir / "dedicated-console.jsonl"
     cmd_file = state_dir / "dedicated-command.txt"
+    switch_file = state_dir.parent / "amp-world-save.kvp"
+    switch_value = save_switch(switch_file) or False
+    panel_save = False
     stamp = None
     state = {}
     active_players = {}
@@ -168,7 +184,11 @@ def supervise(child, state_dir, commands, console_offset):
                     except (UnicodeDecodeError, json.JSONDecodeError):
                         continue
                     if row.get("ProcessId") == child.pid:
-                        print("[Y51] " + safe_line(row.get("Message", "")), flush=True)
+                        line = safe_line(row.get("Message", ""))
+                        print("[Y51] " + line, flush=True)
+                        if line.startswith("dedicated: durable native save completed "):
+                            world = line.removeprefix("dedicated: durable native save completed ")
+                            print(f"[AMP] Zapisano świat: {world}", flush=True)
         error = state.get("Error") or state.get("NetworkFailure")
         if error and error != message:
             print("[Y51] " + safe_line(error), flush=True)
@@ -191,14 +211,25 @@ def supervise(child, state_dir, commands, console_offset):
             if requested_stop and saved and code in (0, -9, 137):
                 return 0
             return (128 - code if code < 0 else code) or int(requested_stop and not saved)
+        value = save_switch(switch_file)
+        if value is not None and value != switch_value:
+            switch_value = value
+            if state.get("WorldLoaded") and not requested_stop:
+                panel_save = True
+            else:
+                print("[AMP] Zapis pominięty. Świat musi być załadowany i działać.", flush=True)
         if pending is None:
             try:
                 pending = commands.get_nowait()
             except queue.Empty:
                 pass
-        if pending is not None and publish_command(cmd_file, pending):
-            requested_stop |= pending.lower() in ("stop", "stop now")
-            pending = None
+        if pending is not None:
+            if publish_command(cmd_file, pending):
+                requested_stop |= pending.lower() in ("stop", "stop now")
+                pending = None
+        elif panel_save and not requested_stop and publish_command(cmd_file, "save"):
+            panel_save = False
+            print("[AMP] Wysłano polecenie zapisu świata.", flush=True)
         time.sleep(0.2)
 
 

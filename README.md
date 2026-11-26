@@ -105,6 +105,8 @@ Preparation verifies the engine, checks out the pinned Y51 commit, applies the L
 
 ## Saves and operation
 
+To save the current world while people are playing, open **Configuration → Świat → Zapisz świat teraz** and click the switch once in either direction. In **Console**, wait for **Zapisano świat** followed by the world name. Y51 emits this acknowledgement after the native save and resume state have been written. A second click requests another save. Wait for the acknowledgement before clicking again. An existing switch position at startup does not request a save. On an older template, the console command `save` already works. **Stop** also requests a final save.
+
 Under **Configuration → Serwer → Promień synchronizacji**, enter a radius in metres (1000–1000000), or `0` for the entire world. A blank field keeps the value in `state/server.json`. Restart the game to apply the change. Upgrading an existing instance requires both the updated AMP template and the accompanying `0.18.4-r2` image.
 
 Use **Stop** in AMP for a final save. Look for `Potwierdzony zapis koncowy: True` in the console. Back up both `SpaceEngineers2/profile/` and `SpaceEngineers2/state/` while the game is stopped. The first contains the world and the second contains the resume information and private server configuration. For an existing AMP installation using this port, restore those directories together and keep the same world name and scenario in AMP. The public template starts with directory listing disabled.

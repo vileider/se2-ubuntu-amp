@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 PACKAGE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("service", PACKAGE / "service.py")
@@ -98,6 +99,80 @@ sys.exit(137)
                     self.assertEqual(service.supervise(child, root, commands, 0), expected)
                     self.assertIn("SE2_HOSTING_READY", stdout.getvalue())
                     self.assertIn("SE2_PLAYER_JOIN 71 Test Player", stdout.getvalue())
+
+    def test_manual_save_switch_uses_live_channel_and_acknowledges_durable_save(self):
+        template = service.read_json(PACKAGE / "y51-se2metaconfig.json")
+        spec = next(row for row in service.read_json(PACKAGE / "y51-se2config.json")
+                    if row["DisplayName"] == "Zapisz świat teraz")
+        mapping = template[0]["Subsections"][0]["SettingMappings"]
+        self.assertEqual(mapping, {"WorldSaveRequest": spec["FieldName"]})
+        self.assertEqual((spec["InputType"], spec["DefaultValue"]), ("checkbox", "false"))
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()) as out:
+            root = Path(tmp)
+            state = root / "state"
+            state.mkdir()
+            switch = root / template[0]["ConfigFile"]
+            def toggle(value):
+                switch.write_text(template[0]["ConfigFormat"].format("WorldSaveRequest", value))
+            toggle("true")  # Saved while offline: never replay it.
+            cmd = state / "dedicated-command.txt"
+            log = state / "dedicated-console.jsonl"
+            proc = Mock(pid=103)
+            report = {"ProcessId": 103, "WorldLoaded": True, "Status": "Hosting Verdure", "NetworkSteamIdentity": "7"}
+            (state / "dedicated-status.json").write_text(json.dumps(report))
+            def frames():
+                yield None
+                self.assertFalse(cmd.exists())
+                toggle("fal")  # AMP is halfway through rewriting the file.
+                yield None
+                self.assertFalse(cmd.exists())
+                cmd.write_text("another command")
+                toggle("False")
+                yield None
+                self.assertEqual(cmd.read_text(), "another command")
+                cmd.unlink()
+                yield None
+                self.assertEqual(cmd.read_text().strip(), "save")
+                cmd.unlink()
+                self.assertNotIn("Zapisano świat", out.getvalue())
+                message = {"Message": "dedicated: durable native save completed Verdure", "ProcessId": 999}
+                log.write_text(json.dumps(message) + "\n")
+                yield None
+                self.assertNotIn("Zapisano świat", out.getvalue())
+                with log.open("a") as f:
+                    f.write(json.dumps(dict(message, ProcessId=103)) + "\n")
+                yield None
+                self.assertIn("Zapisano świat: Verdure", out.getvalue())
+                self.assertFalse(cmd.exists())
+                toggle("True")
+                yield None
+                self.assertEqual(cmd.read_text().strip(), "save")
+                cmd.unlink()
+                yield 0
+            proc.poll.side_effect = frames()
+            with patch.object(service.time, "sleep"):
+                self.assertEqual(service.supervise(proc, state, queue.Queue(), 0), 0)
+            self.assertEqual(out.getvalue().count("Wysłano polecenie"), 2)
+
+    def test_save_switch_does_not_queue_offline_click_for_later(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()) as out:
+            root = Path(tmp)
+            state = root / "state"
+            state.mkdir()
+            switch = root / "amp-world-save.kvp"
+            proc = Mock(pid=25)
+            def frames():
+                yield None
+                switch.write_text("WorldSaveRequest=true")
+                yield None
+                (state / "dedicated-status.json").write_text(json.dumps({"ProcessId": 25, "WorldLoaded": True}))
+                yield None
+                self.assertFalse((state / "dedicated-command.txt").exists())
+                yield 0
+            proc.poll.side_effect = frames()
+            with patch.object(service.time, "sleep"):
+                service.supervise(proc, state, queue.Queue(), 0)
+            self.assertIn("Zapis pominięty", out.getvalue())
 
     def test_existing_command_and_stale_status(self):
         with tempfile.TemporaryDirectory() as tmp:
