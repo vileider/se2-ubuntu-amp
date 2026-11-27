@@ -46,7 +46,7 @@ class TemplateRepairTests(unittest.TestCase):
         env = json.loads(new["App.EnvironmentVariables"])
         self.assertEqual({k: env[k] for k in self.env}, self.env)
         self.assertEqual(env["SE2_STREAMING_RADIUS_METERS"], "{{StreamingRadiusMeters}}")
-        self.assertEqual(new["Meta.ConfigVersion"], "4")
+        self.assertEqual(new["Meta.ConfigVersion"], "5")
         self.assertIn(m.LAUNCHER, new["App.CommandLineArgs"])
         fields = {r["FieldName"] for r in json.loads(self.manifest.read_bytes())}
         self.assertTrue({"WorldSaveRequest", "PanelAddons", "LocalSetting"} <= fields)
@@ -55,7 +55,7 @@ class TemplateRepairTests(unittest.TestCase):
         self.assertEqual((self.game / m.LAUNCHER).read_bytes(), (m.SOURCE / "updates" / m.LAUNCHER).read_bytes())
         self.assertEqual(m.plan(self.root), {})
         m.install(self.root, m.plan(self.root))
-        backup, = self.root.glob(".before-se2-panel-v4-*")
+        backup, = self.root.glob(".before-se2-panel-v5-*")
         self.assertEqual((backup / "GenericModule.kvp").read_bytes(), self.old)
 
     def test_partial_write_rolls_back_existing_and_new_files(self):

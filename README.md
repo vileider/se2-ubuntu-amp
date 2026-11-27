@@ -22,11 +22,13 @@ sudo -u amp git -C "$t" pull --ff-only origin main &&
   sudo -iu amp python3 "$t/repair_instance_template.py" MySE201
 ```
 
-The helper backs up changed panel files in the reported directory and checks the installed controls and launcher. It restores a running panel after the repair. After `SE2_TEMPLATE_V4_OK`, reopen the instance (start its panel from ADS first if it was offline).
+The helper backs up changed panel files in the reported directory and checks the installed controls and launcher. It restores a running panel after the repair. After `SE2_TEMPLATE_V5_OK`, reopen the instance (start its panel from ADS first if it was offline).
 
 1. Open **Configuration → Dodatki → Mody Steam i pluginy GitHub**. Click **+**, paste a Steam Workshop mod link or item ID, or the GitHub repository URL for a plugin in Pulsar's **PluginHub-SE2**. Save the list. Remove an entry with the list's delete control.
 2. With the game running, open **Console**. The manager checks the saved list and reports the title as soon as the source answers, or explains the failure. With the game stopped the check runs at startup. **Znaleziono** confirms the catalog entry. Linux headless compatibility still depends on the plugin. Private items, blueprints, Workshop collections, Windows-only plugins and arbitrary GitHub repositories are outside this manager's supported inputs.
-3. Restart the game when ready. Y51 downloads Workshop mods and reports world mods through the existing **mods** console command. For GitHub entries, Pulsar uses the selected PluginHub IDs in a copy of the current profile. Its loader reports enabled plugins, initialization counts and errors to the AMP console. A GitHub plugin that adds client UI may also need installing on each player's PC.
+3. For the Verdure 9P server plugin, paste `https://github.com/vileider/se2-verdure-planets` in this same list. The launcher checks the DLL against the packaged SHA-256 on every start. The plugin requests its New Planet dependency from Workshop.
+
+   Restart the game when ready. Y51 downloads Workshop mods and reports world mods through the existing **mods** console command. For GitHub entries, Pulsar uses the selected PluginHub IDs in a copy of the current profile. Its loader reports enabled plugins, initialization counts and errors to the AMP console. A GitHub plugin that adds client UI may also need installing on each player's PC.
 
 The list manages its own selections. Existing manual settings and the original Pulsar profile are preserved. Y51 also loads mods embedded in a world save, so removing a Workshop entry from the panel alone may leave that mod active in an existing world.
 

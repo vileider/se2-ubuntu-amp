@@ -3,9 +3,9 @@
     "UpdateStageName": "Prepare the AMP add-on manager",
     "UpdateSourcePlatform": "Linux",
     "UpdateSource": "FetchURL",
-    "UpdateSourceData": "https://raw.githubusercontent.com/vileider/se2-ubuntu-amp/264a0a206e1cc9b41ab25aaeda9f0997960588e3/updates/se2-panel-v2.pyz",
+    "UpdateSourceData": "https://raw.githubusercontent.com/vileider/se2-ubuntu-amp/6efb25303526b91a32619a412d858ab0266ba1f9/updates/se2-panel-v3.pyz",
     "UpdateSourceTarget": "{{$FullBaseDir}}",
-    "UpdateSourceArgs": "se2-panel-v2.pyz",
+    "UpdateSourceArgs": "se2-panel-v3.pyz",
     "OverwriteExistingFiles": false,
     "SkipOnFailure": false
   },
@@ -14,7 +14,7 @@
     "UpdateSourcePlatform": "Linux",
     "UpdateSource": "Executable",
     "UpdateSourceData": "/usr/bin/python3",
-    "UpdateSourceArgs": "-I -c \"import hashlib,pathlib,sys; sys.exit(0 if hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest() == 'e1e3cee11a517e1944ab8e74274b9fb63f69979faee08c261880d1e7de1ace01' else 'Invalid se2-panel-v2.pyz. Remove the damaged file in AMP File Manager and start again.')\" \"{{$FullBaseDir}}se2-panel-v2.pyz\"",
+    "UpdateSourceArgs": "-I -c \"import hashlib,pathlib,sys; sys.exit(0 if hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest() == '808776e7981f4459e5e1042d17d16a8768db3999aae6a92fe17919a79ed6726a' else 'Invalid se2-panel-v3.pyz. Remove the damaged file in AMP File Manager and start again.')\" \"{{$FullBaseDir}}se2-panel-v3.pyz\"",
     "SkipOnFailure": false
   }
 ]

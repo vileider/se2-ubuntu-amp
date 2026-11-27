@@ -33,24 +33,43 @@ def registry(xml=HUB_XML):
 
 
 class AddonTests(unittest.TestCase):
+    def test_verdure_link_installs_verified_dll_and_restarts_offline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / addons.LIST).write_text(f"https://github.com/{addons.VERDURE_REPO}")
+            data = b"test server plugin"
+            with patch.object(addons, "VERDURE_SHA256", addons.hashlib.sha256(data).hexdigest()), \
+                 patch.object(addons, "fetch", side_effect=[data, b"wrong"]) as fetch:
+                rows = addons.check(root)
+                self.assertIsNone(addons.pulsar_profile(root, rows))
+                [dll] = addons.native_plugins(root, rows)
+                self.assertEqual(dll.read_bytes(), data)
+                self.assertEqual(addons.native_plugins(root, addons.check(root)), [dll])
+                self.assertEqual(fetch.call_count, 1)
+                dll.write_bytes(b"corrupt")
+                with self.assertRaisesRegex(ValueError, "SHA-256"):
+                    addons.native_plugins(root, rows)
+                self.assertEqual(dll.read_bytes(), b"corrupt")
+                self.assertEqual(addons.native_plugins(root, []), [])
+
     def test_panel_json_and_published_launcher(self):
         cfg = json.loads((ROOT / "y51-se2config.json").read_bytes())
         self.assertEqual(next(row["Special"] for row in cfg if row["FieldName"] == "PanelAddons"),
                          f"listfile:./SpaceEngineers2/{addons.LIST}")
-        with zipfile.ZipFile(ROOT / "updates/se2-panel-v2.pyz") as z:
+        with zipfile.ZipFile(ROOT / "updates/se2-panel-v3.pyz") as z:
             for name, source in [("__main__.py", "service.py"), ("panel_addons.py", "panel_addons.py")]:
                 self.assertEqual(z.read(name), (ROOT / source).read_bytes())
         with tempfile.TemporaryDirectory() as tmp:
-            output = subprocess.check_output([sys.executable, "-I", str(ROOT / "updates/se2-panel-v2.pyz"),
-                                              "--check-addons", tmp], text=True)
+            output = subprocess.check_output([sys.executable, "-I", "-X", "utf8", str(ROOT / "updates/se2-panel-v3.pyz"),
+                                              "--check-addons", tmp], encoding="utf-8")
             self.assertIn("Sprawdzono listę (0)", output)
 
     def test_amp_start_validates_pinned_artifact_and_update_only_handles_y51(self):
         kvp = (ROOT / "y51-se2.kvp").read_text()
         self.assertIn("App.PreStartStages=@IncludeJson[y51-se2start.json]", kvp)
-        self.assertIn("App.CommandLineArgs=-I -u ./se2-panel-v2.pyz ", kvp)
+        self.assertIn("App.CommandLineArgs=-I -u ./se2-panel-v3.pyz ", kvp)
         stages = json.loads((ROOT / "y51-se2start.json").read_bytes())
-        self.assertRegex(stages[0]["UpdateSourceData"], r"/[0-9a-f]{40}/updates/se2-panel-v2[.]pyz$")
+        self.assertRegex(stages[0]["UpdateSourceData"], r"/[0-9a-f]{40}/updates/se2-panel-v3[.]pyz$")
         update = json.loads((ROOT / "y51-se2updates.json").read_bytes())
         self.assertEqual([item["UpdateSource"] for item in update], ["FetchURL", "Executable"])
         with tempfile.TemporaryDirectory(prefix="amp path ") as tmp:
@@ -127,9 +146,14 @@ class AddonTests(unittest.TestCase):
     def test_launcher_passes_profile_only_when_requested(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(service.subprocess, "Popen") as popen:
             root = Path(tmp)
+            (root / "home/.steam/sdk64").mkdir(parents=True)
             for profile in (None, root / "custom profile.xml"):
-                service.launch(root, root / "server.json", profile)
+                dll = root / "state/amp-plugins/VerdurePlanets.dll"
+                service.launch(root, root / "server.json", profile, [dll] if profile else [])
                 args = popen.call_args.args[0]
+                libraries = [arg for arg in args if str(arg).startswith("-plugins:")]
+                expected = "-plugins:" + str(root / "Plugin/Y51_SE2Online.dll")
+                self.assertEqual(libraries, [expected + (";" + str(dll) if profile else "")])
                 self.assertIn("-sources", args)
                 self.assertEqual("-profile" in args, profile is not None)
                 if profile:

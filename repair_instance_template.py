@@ -1,4 +1,4 @@
-"""Apply the SE2 v4 panel template to one existing AMP Docker instance."""
+"""Apply the SE2 v5 panel template to one existing AMP Docker instance."""
 import argparse
 import codecs
 import fcntl
@@ -14,8 +14,8 @@ import tempfile
 
 SOURCE = Path(__file__).resolve().parent
 GAME = Path("SpaceEngineers2")
-LAUNCHER = "se2-panel-v2.pyz"
-DIGEST = "e1e3cee11a517e1944ab8e74274b9fb63f69979faee08c261880d1e7de1ace01"
+LAUNCHER = "se2-panel-v3.pyz"
+DIGEST = "808776e7981f4459e5e1042d17d16a8768db3999aae6a92fe17919a79ed6726a"
 
 
 def kvp(text):
@@ -33,10 +33,10 @@ def update_kvp(data, template, stages):
             or current.get("App.ExecutableLinux") != template["App.ExecutableLinux"]
             or Path(current["App.BaseDirectory"]) != GAME):
         raise ValueError("Expected the Linux Y51 SE2 template and SpaceEngineers2 base directory")
-    if current.get("Meta.ConfigVersion") not in {"1", "2", "3", "4"}:
+    if current.get("Meta.ConfigVersion") not in {"1", "2", "3", "4", "5"}:
         raise ValueError("Unrecognised template version")
     command = current["App.CommandLineArgs"]
-    if not re.fullmatch(r"(?:-u /opt/se2-amp/service\.py|-I -u \./se2-panel-v[12]\.pyz)"
+    if not re.fullmatch(r"(?:-u /opt/se2-amp/service\.py|-I -u \./se2-panel-v[123]\.pyz)"
                         r" \{\{\$ApplicationPort1\}\} \{\{\$ApplicationPort2\}\}", command):
         raise ValueError("Instance uses a custom launch command; review it before migration")
 
@@ -99,9 +99,9 @@ def plan(instance):
     template = kvp((SOURCE / "y51-se2.kvp").read_text())
     stages = json.loads((SOURCE / "y51-se2start.json").read_bytes())
     launcher = (SOURCE / "updates" / LAUNCHER).read_bytes()
-    if (template["Meta.ConfigVersion"] != "4" or hashlib.sha256(launcher).hexdigest() != DIGEST
+    if (template["Meta.ConfigVersion"] != "5" or hashlib.sha256(launcher).hexdigest() != DIGEST
             or DIGEST not in stages[-1]["UpdateSourceArgs"]):
-        raise ValueError("Checkout does not contain the matching v4 template and verified launcher")
+        raise ValueError("Checkout does not contain the matching v5 template and verified launcher")
 
     def read(rel):
         path = instance / rel
@@ -136,7 +136,7 @@ def plan(instance):
 def install(instance, changes):
     if not changes:
         return
-    backup = Path(tempfile.mkdtemp(prefix=".before-se2-panel-v4-", dir=instance))
+    backup = Path(tempfile.mkdtemp(prefix=".before-se2-panel-v5-", dir=instance))
     print(f"Backup: {backup}", flush=True)
     with tempfile.TemporaryDirectory(dir=instance) as temp:
         staged = Path(temp)
@@ -206,7 +206,7 @@ def repair(name, instances):
             f"AMP_{name}"], text=True).strip()
         if not running(name) or not mount or Path(mount).resolve() != root.resolve():
             raise ValueError("Could not confirm the repaired directory is mounted at /AMP")
-    print("SE2_TEMPLATE_V4_OK (" + ("panel running" if was_running else "offline instance") + ")")
+    print("SE2_TEMPLATE_V5_OK (" + ("panel running" if was_running else "offline instance") + ")")
 
 
 if __name__ == "__main__":
