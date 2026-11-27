@@ -64,6 +64,22 @@ class TemplateTests(unittest.TestCase):
             for args in [(27016, 27018, defaults), (*ports, dict(defaults, SE2_WORLD_NAME="Other"))]:
                 with self.assertRaises(ValueError):
                     service.configure(root, *args)
+            selected = dict(defaults, SE2_WORLD_NAME="Witamy na Verdure november", SE2_START_CONTENT="ExistingSave")
+            target = root / "profile/AppData/SaveGames" / selected["SE2_WORLD_NAME"]
+            target.mkdir(parents=True)
+            (target / ".container-info").write_text("{}")
+            before = config.read_bytes()
+            with self.assertRaises(ValueError):
+                service.configure(root, *ports, selected)
+            self.assertEqual(config.read_bytes(), before)
+            (target / "savegame.vrb").write_bytes(b"save")
+            service.configure(root, *ports, selected)
+            chosen = service.read_json(config)
+            self.assertEqual((chosen["SaveId"], chosen["StartContent"], chosen["StartWorkshop"]),
+                             (target.name, "", ""))
+            self.assertEqual(service.read_json(config.parent / "dedicated-state.json"), state)
+            with self.assertRaises(ValueError):
+                service.configure(root, *ports, dict(selected, SE2_WORLD_NAME="../other"))
 
     def test_control_channel_and_save_ack(self):
         simulation = """

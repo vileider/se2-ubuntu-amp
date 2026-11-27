@@ -71,7 +71,8 @@
     "EnumValues": {
       "EmptyWorld": "EmptyWorld",
       "ClassicSurvival": "ClassicSurvival",
-      "Survival": "Survival"
+      "Survival": "Survival",
+      "ExistingSave": "Istniejący zapis z profilu"
     }
   },
   {

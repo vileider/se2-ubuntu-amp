@@ -24,6 +24,8 @@ sudo -u amp git -C "$t" pull --ff-only origin main &&
 
 The helper backs up changed panel files in the reported directory and checks the installed controls and launcher. It restores a running panel after the repair. After `SE2_TEMPLATE_V5_OK`, reopen the instance (start its panel from ADS first if it was offline).
 
+To select a saved world in this instance, set **Świat startowy** to **Istniejący zapis z profilu** and enter its folder name under **Nazwa świata**. For the November test use `Witamy na Verdure november`. The launcher checks the save in `profile/AppData/SaveGames` before asking Y51 to open it.
+
 1. Open **Configuration → Dodatki → Mody Steam i pluginy GitHub**. Click **+**, paste a Steam Workshop mod link or item ID, or the GitHub repository URL for a plugin in Pulsar's **PluginHub-SE2**. Save the list. Remove an entry with the list's delete control.
 2. With the game running, open **Console**. The manager checks the saved list and reports the title as soon as the source answers, or explains the failure. With the game stopped the check runs at startup. **Znaleziono** confirms the catalog entry. Linux headless compatibility still depends on the plugin. Private items, blueprints, Workshop collections, Windows-only plugins and arbitrary GitHub repositories are outside this manager's supported inputs.
 3. For the Verdure 9P server plugin, paste `https://github.com/vileider/se2-verdure-planets` in this same list. The launcher checks the DLL against the packaged SHA-256 on every start. The plugin requests its New Planet dependency from Workshop.

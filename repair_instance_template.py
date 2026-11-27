@@ -15,7 +15,7 @@ import tempfile
 SOURCE = Path(__file__).resolve().parent
 GAME = Path("SpaceEngineers2")
 LAUNCHER = "se2-panel-v3.pyz"
-DIGEST = "808776e7981f4459e5e1042d17d16a8768db3999aae6a92fe17919a79ed6726a"
+DIGEST = "457d480970b3f12c7a0d01b3a58de42941e490b3fceffa814d2367e466a1d1ac"
 
 
 def kvp(text):
@@ -81,6 +81,7 @@ def add_definitions(data, source_name, key, required):
         raise ValueError(f"Expected an array for {source_name}")
     existing = {row.get(key): row for row in rows}
     additions = []
+    changed = False
     for entry in json.loads((SOURCE / source_name).read_bytes()):
         name = entry[key]
         if name not in existing:
@@ -90,7 +91,14 @@ def add_definitions(data, source_name, key, required):
             for prop in required[name]:
                 if existing[name].get(prop) != entry[prop]:
                     raise ValueError(f"Conflicting {name}.{prop} in {source_name}")
-    if data is not None and not additions:
+            if name == "StartContent":
+                options = existing[name].get("EnumValues")
+                if not isinstance(options, dict):
+                    raise ValueError("StartContent.EnumValues must contain the scenario choices")
+                if "ExistingSave" not in options:
+                    options["ExistingSave"] = entry["EnumValues"]["ExistingSave"]
+                    changed = True
+    if data is not None and not additions and not changed:
         return data
     return (json.dumps(rows + additions, ensure_ascii=False, indent=2) + "\n").encode()
 
@@ -121,6 +129,7 @@ def plan(instance):
     record(cfg, data, update_kvp(data, template, stages))
     for target, source, key, checks in (
         ("configmanifest.json", "y51-se2config.json", "FieldName", {
+            "StartContent": ("InputType",),
             "WorldSaveRequest": ("ParamFieldName", "InputType"),
             "PanelAddons": ("Special", "InputType"),
             "StreamingRadiusMeters": ("InputType",)}),

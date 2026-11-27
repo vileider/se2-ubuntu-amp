@@ -48,9 +48,19 @@ def configure(root, game, query, settings, addons=()):
             or not 2 <= players <= 384 or (delay != 0 and delay < 30)
             or advertise not in ("true", "false")):
         raise ValueError("Sprawdź hasło, limit graczy, widoczność lub odstęp między zapisami w AMP.")
-    if scenario not in ("EmptyWorld", "ClassicSurvival", "Survival"):
+    existing = scenario == "ExistingSave"
+    if existing:
+        saves = root / "profile/AppData/SaveGames"
+        selected = saves / world
+        if (world.startswith(".") or "/" in world or "\\" in world or selected.is_symlink()
+                or selected.resolve().parent != saves.resolve()
+                or not (selected / ".container-info").is_file()
+                or not any((selected / name).is_file() and (selected / name).stat().st_size
+                           for name in ("savegame.vrb", "savegame"))):
+            raise ValueError(f"Brak zapisu w profilu AMP: {world}. Sprawdz nazwe folderu w SaveGames.")
+    elif scenario not in ("EmptyWorld", "ClassicSurvival", "Survival"):
         raise ValueError("Nieznany świat startowy.")
-    if not (root / "GameData/Vanilla/Worlds" / scenario / "savegame.vrb").is_file():
+    elif not (root / "GameData/Vanilla/Worlds" / scenario / "savegame.vrb").is_file():
         raise ValueError(f"Brak danych scenariusza {scenario}.")
 
     state_dir = root / "state"
@@ -58,7 +68,10 @@ def configure(root, game, query, settings, addons=()):
     path = state_dir / "server.json"
     cfg = read_json(path) if path.exists() else {}
     previous = state_dir / "dedicated-state.json"
-    if previous.exists():
+    if existing:
+        cfg.update(SaveId=world, StartWorkshop="")
+        scenario = ""
+    elif previous.exists():
         saved = read_json(previous)
         if (saved.get("WorldName"), saved.get("SourceContent")) != (world, scenario):
             raise ValueError("Ten profil ma zapis. Przywróć nazwę świata i scenariusz w AMP albo użyj nowej instancji.")
