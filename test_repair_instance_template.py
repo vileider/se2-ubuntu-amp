@@ -2,6 +2,7 @@ import codecs
 import fcntl
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -73,6 +74,35 @@ class TemplateRepairTests(unittest.TestCase):
         self.assertEqual(json.loads(self.manifest.read_bytes()), [{"FieldName": "LocalSetting", "DisplayName": "local"}])
         self.assertFalse((self.root / "metaconfig.json").exists())
         self.assertFalse((self.game / m.LAUNCHER).exists())
+
+    def test_migrate_registered_local_source_with_backup_and_repeat(self):
+        public = self.root.parent / "ADS01/Plugins/ADSModule/DeploymentTemplates" / m.PUBLIC_SOURCE
+        public.mkdir(parents=True)
+        (public / "updates").mkdir()
+        for f in ("y51-se2.kvp", "y51-se2start.json", "y51-se2updates.json", "y51-se2config.json",
+                  "y51-se2metaconfig.json", "updates/" + m.LAUNCHER):
+            shutil.copy2(m.SOURCE / f, public / f)
+        template = m.kvp((public / "y51-se2.kvp").read_text())
+        original = self.old.replace(m.PUBLIC_SOURCE.encode(), m.LOCAL_SOURCE.encode())
+        original += ("Meta.AppConfigId=" + template["Meta.AppConfigId"] + "\r\n").encode()
+        self.kvp.write_bytes(original)
+        with self.assertRaisesRegex(ValueError, "registered|using the template"):
+            m.plan(self.root, True)
+        with patch.object(m, "SOURCE", public):
+            m.install(self.root, m.plan(self.root, True), True)
+            effective = m.kvp(self.kvp.read_text(encoding="utf-8-sig"))
+            self.assertEqual(effective["Meta.OriginalSource"], m.PUBLIC_SOURCE)
+            self.assertEqual(effective["App.AppSettings"], m.kvp(original.decode("utf-8-sig"))["App.AppSettings"])
+            self.assertEqual(effective["Meta.ConfigVersion"], "5")
+            self.assertEqual(m.plan(self.root, True), {})
+            backup, = self.root.glob(".before-se2-panel-v5-*")
+            self.assertEqual((backup / "GenericModule.kvp").read_bytes(), original)
+            self.kvp.write_bytes(original.replace(template["Meta.AppConfigId"].encode(), b"other"))
+            with self.assertRaisesRegex(ValueError, "application IDs"):
+                m.plan(self.root, True)
+            self.kvp.write_bytes(original.replace(m.LOCAL_SOURCE.encode(), b"another-local-template"))
+            with self.assertRaisesRegex(ValueError, "original LOCAL"):
+                m.plan(self.root, True)
 
     def test_live_game_blocks_before_stopping_panel(self):
         with (

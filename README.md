@@ -24,6 +24,8 @@ sudo -u amp git -C "$t" pull --ff-only origin main &&
 
 The helper backs up changed panel files in the reported directory and checks the installed controls and launcher. It restores a running panel after the repair. After `SE2_TEMPLATE_V5_OK`, reopen the instance (start its panel from ADS first if it was offline).
 
+For an instance whose `Meta.OriginalSource` is `LOCAL-KntSE2-main`, append `--migrate-local-source` to the repair command above. Run it from the existing public ADS template checkout. This also updates the instance's source setting and checks it after restarting the panel.
+
 To select a saved world in this instance, set **Świat startowy** to **Istniejący zapis z profilu** and enter its folder name under **Nazwa świata**. For the November test use `Witamy na Verdure november`. The launcher checks the save in `profile/AppData/SaveGames` before asking Y51 to open it.
 
 1. Open **Configuration → Dodatki → Mody Steam i pluginy GitHub**. Click **+**, paste a Steam Workshop mod link or item ID, or the GitHub repository URL for a plugin in Pulsar's **PluginHub-SE2**. Save the list. Remove an entry with the list's delete control.

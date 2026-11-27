@@ -16,6 +16,8 @@ SOURCE = Path(__file__).resolve().parent
 GAME = Path("SpaceEngineers2")
 LAUNCHER = "se2-panel-v3.pyz"
 DIGEST = "457d480970b3f12c7a0d01b3a58de42941e490b3fceffa814d2367e466a1d1ac"
+PUBLIC_SOURCE = "vileider-se2-ubuntu-amp-main"
+LOCAL_SOURCE = "LOCAL-KntSE2-main"
 
 
 def kvp(text):
@@ -26,7 +28,7 @@ def compact(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def update_kvp(data, template, stages):
+def update_kvp(data, template, stages, migrate_local_source=False):
     text = data.decode("utf-8-sig")
     current = kvp(text)
     if (current.get("Meta.ConfigRoot") != "y51-se2.kvp"
@@ -42,6 +44,12 @@ def update_kvp(data, template, stages):
 
     changes = {"Meta.ConfigVersion": template["Meta.ConfigVersion"],
                "App.CommandLineArgs": template["App.CommandLineArgs"]}
+    if migrate_local_source:
+        if current.get("Meta.OriginalSource") not in (LOCAL_SOURCE, PUBLIC_SOURCE):
+            raise ValueError("Expected the original LOCAL-KntSE2-main or the public SE2 source")
+        if not template.get("Meta.AppConfigId") or current.get("Meta.AppConfigId") != template["Meta.AppConfigId"]:
+            raise ValueError("Instance and destination template have different application IDs")
+        changes["Meta.OriginalSource"] = PUBLIC_SOURCE
     env = json.loads(current.get("App.EnvironmentVariables", "{}"))
     merged = {**json.loads(template["App.EnvironmentVariables"]), **env}
     if merged != env:
@@ -103,7 +111,11 @@ def add_definitions(data, source_name, key, required):
     return (json.dumps(rows + additions, ensure_ascii=False, indent=2) + "\n").encode()
 
 
-def plan(instance):
+def plan(instance, migrate_local_source=False):
+    if migrate_local_source:
+        registered = instance.parent / "ADS01/Plugins/ADSModule/DeploymentTemplates" / PUBLIC_SOURCE
+        if SOURCE.resolve() != registered.resolve():
+            raise ValueError(f"Run the migration using the template at {registered}")
     template = kvp((SOURCE / "y51-se2.kvp").read_text())
     stages = json.loads((SOURCE / "y51-se2start.json").read_bytes())
     launcher = (SOURCE / "updates" / LAUNCHER).read_bytes()
@@ -126,7 +138,7 @@ def plan(instance):
     data = read(cfg)
     if data is None:
         raise ValueError("Missing GenericModule.kvp")
-    record(cfg, data, update_kvp(data, template, stages))
+    record(cfg, data, update_kvp(data, template, stages, migrate_local_source))
     for target, source, key, checks in (
         ("configmanifest.json", "y51-se2config.json", "FieldName", {
             "StartContent": ("InputType",),
@@ -142,7 +154,7 @@ def plan(instance):
     return changes
 
 
-def install(instance, changes):
+def install(instance, changes, migrate_local_source=False):
     if not changes:
         return
     backup = Path(tempfile.mkdtemp(prefix=".before-se2-panel-v5-", dir=instance))
@@ -163,7 +175,7 @@ def install(instance, changes):
             for rel in changes:
                 (staged / rel).replace(instance / rel)
                 installed.append(rel)
-            if plan(instance):
+            if plan(instance, migrate_local_source):
                 raise ValueError("Effective template still differs after installation")
         except BaseException:
             for rel in reversed(installed):
@@ -182,7 +194,7 @@ def running(name):
     return f"AMP_{name}" in names.splitlines()
 
 
-def repair(name, instances):
+def repair(name, instances, migrate_local_source=False):
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name) or name.startswith("-"):
         raise ValueError("Invalid AMP instance name")
     root = (instances / name).resolve()
@@ -197,17 +209,17 @@ def repair(name, instances):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 raise ValueError("Stop the game in AMP and wait for its final save") from None
-            if plan(root):
+            if plan(root, migrate_local_source):
                 if was_running:
                     subprocess.run(["ampinstmgr", "-q", name], check=True)
                 if running(name):
                     raise ValueError("Instance panel is still running")
                 restart = was_running
-                install(root, plan(root))  # AMP may write its KVP during shutdown.
+                install(root, plan(root, migrate_local_source), migrate_local_source)
     finally:
         if restart:
             subprocess.run(["ampinstmgr", "-s", name], check=True)
-    if plan(root):
+    if plan(root, migrate_local_source):
         raise ValueError("Panel files changed again after restarting the instance")
     if was_running:
         mount = subprocess.check_output(["docker", "inspect", "--format",
@@ -216,12 +228,17 @@ def repair(name, instances):
         if not running(name) or not mount or Path(mount).resolve() != root.resolve():
             raise ValueError("Could not confirm the repaired directory is mounted at /AMP")
     print("SE2_TEMPLATE_V5_OK (" + ("panel running" if was_running else "offline instance") + ")")
+    if migrate_local_source:
+        print(f"{name}: Meta.OriginalSource={PUBLIC_SOURCE}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("instance")
+    parser.add_argument("--migrate-local-source", action="store_true",
+                        help="Rebind the legacy LOCAL-KntSE2-main instance to the registered public template")
+    args = parser.parse_args()
     try:
-        repair(parser.parse_args().instance, Path.home() / ".ampdata/instances")
+        repair(args.instance, Path.home() / ".ampdata/instances", args.migrate_local_source)
     except (OSError, KeyError, TypeError, ValueError, subprocess.CalledProcessError) as exc:
         sys.exit(f"SE2 AMP: {exc}")
