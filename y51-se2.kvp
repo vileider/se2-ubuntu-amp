@@ -18,6 +18,7 @@ Meta.NoCommercialUsage=True
 Meta.MinAMPVersion=2.5.1.8
 Meta.ConfigVersion=5
 Meta.AppConfigId=78d25187-fbf8-41fc-bb5b-9de7f34ab7d4
+Meta.OriginalSource=vileider-se2-ubuntu-amp-main
 App.DisplayName=Space Engineers 2 Online
 App.RootDir=./SpaceEngineers2/
 App.BaseDirectory=./SpaceEngineers2/
