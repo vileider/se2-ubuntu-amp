@@ -1,4 +1,4 @@
-"""Apply the SE2 v4 panel template to one existing AMP Docker instance."""
+"""Apply the SE2 v5 panel template to one existing AMP Docker instance."""
 import argparse
 import codecs
 import fcntl
@@ -14,8 +14,8 @@ import tempfile
 
 SOURCE = Path(__file__).resolve().parent
 GAME = Path("SpaceEngineers2")
-LAUNCHER = "se2-panel-v2.pyz"
-DIGEST = "e1e3cee11a517e1944ab8e74274b9fb63f69979faee08c261880d1e7de1ace01"
+LAUNCHER = "se2-panel-v3.pyz"
+DIGEST = "457d480970b3f12c7a0d01b3a58de42941e490b3fceffa814d2367e466a1d1ac"
 
 
 def kvp(text):
@@ -33,10 +33,10 @@ def update_kvp(data, template, stages):
             or current.get("App.ExecutableLinux") != template["App.ExecutableLinux"]
             or Path(current["App.BaseDirectory"]) != GAME):
         raise ValueError("Expected the Linux Y51 SE2 template and SpaceEngineers2 base directory")
-    if current.get("Meta.ConfigVersion") not in {"1", "2", "3", "4"}:
+    if current.get("Meta.ConfigVersion") not in {"1", "2", "3", "4", "5"}:
         raise ValueError("Unrecognised template version")
     command = current["App.CommandLineArgs"]
-    if not re.fullmatch(r"(?:-u /opt/se2-amp/service\.py|-I -u \./se2-panel-v[12]\.pyz)"
+    if not re.fullmatch(r"(?:-u /opt/se2-amp/service\.py|-I -u \./se2-panel-v[123]\.pyz)"
                         r" \{\{\$ApplicationPort1\}\} \{\{\$ApplicationPort2\}\}", command):
         raise ValueError("Instance uses a custom launch command; review it before migration")
 
@@ -81,6 +81,7 @@ def add_definitions(data, source_name, key, required):
         raise ValueError(f"Expected an array for {source_name}")
     existing = {row.get(key): row for row in rows}
     additions = []
+    changed = False
     for entry in json.loads((SOURCE / source_name).read_bytes()):
         name = entry[key]
         if name not in existing:
@@ -90,7 +91,14 @@ def add_definitions(data, source_name, key, required):
             for prop in required[name]:
                 if existing[name].get(prop) != entry[prop]:
                     raise ValueError(f"Conflicting {name}.{prop} in {source_name}")
-    if data is not None and not additions:
+            if name == "StartContent":
+                options = existing[name].get("EnumValues")
+                if not isinstance(options, dict):
+                    raise ValueError("StartContent.EnumValues must contain the scenario choices")
+                if "ExistingSave" not in options:
+                    options["ExistingSave"] = entry["EnumValues"]["ExistingSave"]
+                    changed = True
+    if data is not None and not additions and not changed:
         return data
     return (json.dumps(rows + additions, ensure_ascii=False, indent=2) + "\n").encode()
 
@@ -99,9 +107,9 @@ def plan(instance):
     template = kvp((SOURCE / "y51-se2.kvp").read_text())
     stages = json.loads((SOURCE / "y51-se2start.json").read_bytes())
     launcher = (SOURCE / "updates" / LAUNCHER).read_bytes()
-    if (template["Meta.ConfigVersion"] != "4" or hashlib.sha256(launcher).hexdigest() != DIGEST
+    if (template["Meta.ConfigVersion"] != "5" or hashlib.sha256(launcher).hexdigest() != DIGEST
             or DIGEST not in stages[-1]["UpdateSourceArgs"]):
-        raise ValueError("Checkout does not contain the matching v4 template and verified launcher")
+        raise ValueError("Checkout does not contain the matching v5 template and verified launcher")
 
     def read(rel):
         path = instance / rel
@@ -121,6 +129,7 @@ def plan(instance):
     record(cfg, data, update_kvp(data, template, stages))
     for target, source, key, checks in (
         ("configmanifest.json", "y51-se2config.json", "FieldName", {
+            "StartContent": ("InputType",),
             "WorldSaveRequest": ("ParamFieldName", "InputType"),
             "PanelAddons": ("Special", "InputType"),
             "StreamingRadiusMeters": ("InputType",)}),
@@ -136,7 +145,7 @@ def plan(instance):
 def install(instance, changes):
     if not changes:
         return
-    backup = Path(tempfile.mkdtemp(prefix=".before-se2-panel-v4-", dir=instance))
+    backup = Path(tempfile.mkdtemp(prefix=".before-se2-panel-v5-", dir=instance))
     print(f"Backup: {backup}", flush=True)
     with tempfile.TemporaryDirectory(dir=instance) as temp:
         staged = Path(temp)
@@ -206,7 +215,7 @@ def repair(name, instances):
             f"AMP_{name}"], text=True).strip()
         if not running(name) or not mount or Path(mount).resolve() != root.resolve():
             raise ValueError("Could not confirm the repaired directory is mounted at /AMP")
-    print("SE2_TEMPLATE_V4_OK (" + ("panel running" if was_running else "offline instance") + ")")
+    print("SE2_TEMPLATE_V5_OK (" + ("panel running" if was_running else "offline instance") + ")")
 
 
 if __name__ == "__main__":

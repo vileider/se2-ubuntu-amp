@@ -48,9 +48,19 @@ def configure(root, game, query, settings, addons=()):
             or not 2 <= players <= 384 or (delay != 0 and delay < 30)
             or advertise not in ("true", "false")):
         raise ValueError("Sprawdź hasło, limit graczy, widoczność lub odstęp między zapisami w AMP.")
-    if scenario not in ("EmptyWorld", "ClassicSurvival", "Survival"):
+    existing = scenario == "ExistingSave"
+    if existing:
+        saves = root / "profile/AppData/SaveGames"
+        selected = saves / world
+        if (world.startswith(".") or "/" in world or "\\" in world or selected.is_symlink()
+                or selected.resolve().parent != saves.resolve()
+                or not (selected / ".container-info").is_file()
+                or not any((selected / name).is_file() and (selected / name).stat().st_size
+                           for name in ("savegame.vrb", "savegame"))):
+            raise ValueError(f"Brak zapisu w profilu AMP: {world}. Sprawdz nazwe folderu w SaveGames.")
+    elif scenario not in ("EmptyWorld", "ClassicSurvival", "Survival"):
         raise ValueError("Nieznany świat startowy.")
-    if not (root / "GameData/Vanilla/Worlds" / scenario / "savegame.vrb").is_file():
+    elif not (root / "GameData/Vanilla/Worlds" / scenario / "savegame.vrb").is_file():
         raise ValueError(f"Brak danych scenariusza {scenario}.")
 
     state_dir = root / "state"
@@ -58,7 +68,10 @@ def configure(root, game, query, settings, addons=()):
     path = state_dir / "server.json"
     cfg = read_json(path) if path.exists() else {}
     previous = state_dir / "dedicated-state.json"
-    if previous.exists():
+    if existing:
+        cfg.update(SaveId=world, StartWorkshop="")
+        scenario = ""
+    elif previous.exists():
         saved = read_json(previous)
         if (saved.get("WorldName"), saved.get("SourceContent")) != (world, scenario):
             raise ValueError("Ten profil ma zapis. Przywróć nazwę świata i scenariusz w AMP albo użyj nowej instancji.")
@@ -90,7 +103,7 @@ def configure(root, game, query, settings, addons=()):
     return path
 
 
-def launch(root, config, plugin_profile=None):
+def launch(root, config, plugin_profile=None, native_plugins=()):
     profile, home = root / "profile", root / "home"
     profile.mkdir(exist_ok=True)
     steam = home / ".steam"
@@ -102,10 +115,11 @@ def launch(root, config, plugin_profile=None):
     env.update(HOME=str(home), DOTNET_ROOT="/opt/se2-amp/dotnet", COMPlus_ReadyToRun="0",
                SDL_VIDEODRIVER="offscreen", SteamAppId="1133870", SteamGameId="1133870",
                SE2_NATIVE_DIR=native, LD_LIBRARY_PATH=native + ":/opt/se2-steam/sdk64")
+    libraries = [root / "Plugin/Y51_SE2Online.dll", *native_plugins]
     args = [root / "pulsar/Modern.bin", "-game2", root / "Game2", "-sources", "-noUpdate",
             "-noPrompt", "-noSplash", "-lazySteam", "-noStats", "-noDiscord", "-allowMultiple",
             "-noPillars", "-localDedicatedServer", f"-appData:{profile}",
-            f"-plugins:{root / 'Plugin/Y51_SE2Online.dll'}", f"-y51dedicated:{config}",
+            "-plugins:" + ";".join(map(str, libraries)), f"-y51dedicated:{config}",
             "-y51headless", "-hiddenWindow"]
     if plugin_profile is not None:
         args.extend(["-profile", str(plugin_profile)])
@@ -252,6 +266,7 @@ def main():
         stamp = listfile.read_bytes() if listfile.is_file() else b""
         addons = panel_addons.check(root)
         plugin_profile = panel_addons.pulsar_profile(root, addons)
+        native_plugins = panel_addons.native_plugins(root, addons)
         config = configure(root, int(sys.argv[1]), int(sys.argv[2]), os.environ, addons)
         for name in ("dedicated-command.txt", "dedicated-status.json"):
             p = state_dir / name
@@ -267,7 +282,7 @@ def main():
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda *_: commands.put("stop now"))
         read_pulsar = panel_addons.pulsar_log(root) if plugin_profile else None
-        child = launch(root, config, plugin_profile)
+        child = launch(root, config, plugin_profile, native_plugins)
         if read_pulsar:
             threading.Thread(target=read_pulsar, daemon=True).start()
         threading.Thread(target=panel_addons.live_preview, args=(root, stamp), daemon=True).start()

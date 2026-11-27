@@ -1,4 +1,5 @@
 """Resolve AMP listfile entries and pass them to Y51 and Pulsar at game startup."""
+import hashlib
 import io
 import json
 import os
@@ -17,6 +18,9 @@ LIST = "amp-addons.txt"
 HUB = "https://codeload.github.com/StarCpt/PluginHub-SE2/zip/refs/heads/main"
 STEAM = "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
 BUILTIN = {"cometworks/linux-compat2", "yellow5111/se2online"}
+VERDURE_REPO = "vileider/se2-verdure-planets"
+VERDURE_DLL = "VerdurePlanets.dll"
+VERDURE_SHA256 = "6d90c74017425348fe3039704862385b77a8119747b365cd55797ac9e4e1f894"
 
 
 def notice(message):
@@ -127,12 +131,15 @@ def hub_plugins():
 def resolve(keys):
     ids = [value for kind, value in keys if kind == "steam"]
     steam = dict(steam_items(ids)) if ids else {}
-    hub = hub_plugins() if any(kind == "github" for kind, _ in keys) else {}
+    hub = hub_plugins() if any(kind == "github" and key != VERDURE_REPO for kind, key in keys) else {}
     resolved = []
     for kind, key in keys:
         if kind == "steam":
             name, ident = steam[key], key
             notice(f"Znaleziono w Steam Workshop: {name} [ID {key}].")
+        elif kind == "github" and key == VERDURE_REPO:
+            name, ident = "Verdure Planets 9P", VERDURE_DLL
+            notice(f"Rozpoznano plugin serwera: {name} [{key}].")
         else:
             if key in BUILTIN:
                 raise ValueError(f"{key} jest już częścią tego serwera.")
@@ -211,8 +218,22 @@ def apply_mods(cfg, rows, previous):
     return owned
 
 
+def native_plugins(root, rows):
+    if not any(row["source"] == "github" and row["key"] == VERDURE_REPO for row in rows):
+        return []
+    path = root / "state/amp-plugins" / VERDURE_DLL
+    if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != VERDURE_SHA256:
+        url = f"https://raw.githubusercontent.com/{VERDURE_REPO}/main/dist/0.1.0/{VERDURE_DLL}"
+        data = fetch(url)
+        if hashlib.sha256(data).hexdigest() != VERDURE_SHA256:
+            raise ValueError("Verdure Planets: pobrany DLL ma niezgodna sume SHA-256.")
+        atomic(path, data)
+    notice("Verdure Planets 9P: DLL sprawdzony i gotowy.")
+    return [path]
+
+
 def pulsar_profile(root, rows):
-    plugins = [row for row in rows if row["source"] == "github"]
+    plugins = [row for row in rows if row["source"] == "github" and row["key"] != VERDURE_REPO]
     if not plugins:
         return None
     current = root / "pulsar/Modern/Profiles/Current.xml"
@@ -235,4 +256,3 @@ def pulsar_profile(root, rows):
     target = root / "state/amp-pulsar-profile.xml"
     atomic(target, ET.tostring(profile, encoding="utf-8", xml_declaration=True))
     return target
-

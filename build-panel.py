@@ -12,4 +12,4 @@ def build(dest):
 
 
 if __name__ == "__main__":
-    build(ROOT / "updates/se2-panel-v2.pyz")
+    build(ROOT / "updates/se2-panel-v3.pyz")
