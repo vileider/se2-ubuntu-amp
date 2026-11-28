@@ -1,7 +1,6 @@
-"""Apply the SE2 v5 panel template to one existing AMP Docker instance."""
+"""Apply the SE2 v6 panel template to one existing AMP Docker instance."""
 import argparse
 import codecs
-import fcntl
 import hashlib
 import json
 import os
@@ -14,8 +13,8 @@ import tempfile
 
 SOURCE = Path(__file__).resolve().parent
 GAME = Path("SpaceEngineers2")
-LAUNCHER = "se2-panel-v3.pyz"
-DIGEST = "457d480970b3f12c7a0d01b3a58de42941e490b3fceffa814d2367e466a1d1ac"
+LAUNCHER = "se2-panel-v4.pyz"
+DIGEST = "f4a22cfae2ff50edfe1987315577dcbcbc3a931b44d0d42c4c5726171da92ee1"
 PUBLIC_SOURCE = "vileider-se2-ubuntu-amp-main"
 LOCAL_SOURCE = "LOCAL-KntSE2-main"
 
@@ -35,10 +34,10 @@ def update_kvp(data, template, stages, migrate_local_source=False):
             or current.get("App.ExecutableLinux") != template["App.ExecutableLinux"]
             or Path(current["App.BaseDirectory"]) != GAME):
         raise ValueError("Expected the Linux Y51 SE2 template and SpaceEngineers2 base directory")
-    if current.get("Meta.ConfigVersion") not in {"1", "2", "3", "4", "5"}:
+    if current.get("Meta.ConfigVersion") not in {"1", "2", "3", "4", "5", "6"}:
         raise ValueError("Unrecognised template version")
     command = current["App.CommandLineArgs"]
-    if not re.fullmatch(r"(?:-u /opt/se2-amp/service\.py|-I -u \./se2-panel-v[123]\.pyz)"
+    if not re.fullmatch(r"(?:-u /opt/se2-amp/service\.py|-I -u \./se2-panel-v[1234]\.pyz)"
                         r" \{\{\$ApplicationPort1\}\} \{\{\$ApplicationPort2\}\}", command):
         raise ValueError("Instance uses a custom launch command; review it before migration")
 
@@ -55,16 +54,20 @@ def update_kvp(data, template, stages, migrate_local_source=False):
     if merged != env:
         changes["App.EnvironmentVariables"] = compact(merged)
 
-    previous = json.loads(current.get("App.PreStartStages", "[]"))
-    names = {s["UpdateStageName"] for s in stages}
-    first = next((i for i, step in enumerate(previous) if step.get("UpdateStageName") in names),
-                 len(previous))
-    following = [step for step in previous[first:] if step.get("UpdateStageName") not in names]
-    merged_stages = previous[:first] + stages + following
-    if previous != merged_stages:
-        changes["App.PreStartStages"] = compact(merged_stages)
-    if json.loads(current.get("App.UpdateSources", "[]")) == []:
-        changes["App.UpdateSources"] = compact(json.loads((SOURCE / "y51-se2updates.json").read_bytes()))
+    updates = json.loads((SOURCE / "y51-se2updates.json").read_bytes())
+    for field, managed in (("App.PreStartStages", stages), ("App.UpdateSources", updates)):
+        previous = json.loads(current.get(field, "[]"))
+        if field == "App.UpdateSources" and previous:
+            y51 = {step["UpdateStageName"] for step in updates[:2]}
+            if not any(step.get("UpdateStageName") in y51 for step in previous):
+                managed = updates[2:]
+        names = {step["UpdateStageName"] for step in managed}
+        first = next((i for i, step in enumerate(previous) if step.get("UpdateStageName") in names),
+                     len(previous))
+        following = [step for step in previous[first:] if step.get("UpdateStageName") not in names]
+        merged_stages = previous[:first] + managed + following
+        if previous != merged_stages:
+            changes[field] = compact(merged_stages)
 
     newline = "\r\n" if "\r\n" in text else "\n"
     for key, value in changes.items():
@@ -94,7 +97,13 @@ def add_definitions(data, source_name, key, required):
         name = entry[key]
         if name not in existing:
             additions.append(entry)
-        elif name in required:
+        if name in existing and key == "FieldName":
+            props = ("Category", "Subcategory", "Description") if name == "PanelAddons" else ("Category", "Subcategory")
+            for prop in props:
+                if existing[name].get(prop) != entry[prop]:
+                    existing[name][prop] = entry[prop]
+                    changed = True
+        if name in existing and name in required:
             # AMP can add defaults when serialising; check the fields that wire each control.
             for prop in required[name]:
                 if existing[name].get(prop) != entry[prop]:
@@ -119,9 +128,9 @@ def plan(instance, migrate_local_source=False):
     template = kvp((SOURCE / "y51-se2.kvp").read_text())
     stages = json.loads((SOURCE / "y51-se2start.json").read_bytes())
     launcher = (SOURCE / "updates" / LAUNCHER).read_bytes()
-    if (template["Meta.ConfigVersion"] != "5" or hashlib.sha256(launcher).hexdigest() != DIGEST
+    if (template["Meta.ConfigVersion"] != "6" or hashlib.sha256(launcher).hexdigest() != DIGEST
             or DIGEST not in stages[-1]["UpdateSourceArgs"]):
-        raise ValueError("Checkout does not contain the matching v5 template and verified launcher")
+        raise ValueError("Checkout does not contain the matching v6 template and verified launcher")
 
     def read(rel):
         path = instance / rel
@@ -157,7 +166,7 @@ def plan(instance, migrate_local_source=False):
 def install(instance, changes, migrate_local_source=False):
     if not changes:
         return
-    backup = Path(tempfile.mkdtemp(prefix=".before-se2-panel-v5-", dir=instance))
+    backup = Path(tempfile.mkdtemp(prefix=".before-se2-panel-v6-", dir=instance))
     print(f"Backup: {backup}", flush=True)
     with tempfile.TemporaryDirectory(dir=instance) as temp:
         staged = Path(temp)
@@ -195,6 +204,7 @@ def running(name):
 
 
 def repair(name, instances, migrate_local_source=False):
+    import fcntl
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name) or name.startswith("-"):
         raise ValueError("Invalid AMP instance name")
     root = (instances / name).resolve()
@@ -227,7 +237,7 @@ def repair(name, instances, migrate_local_source=False):
             f"AMP_{name}"], text=True).strip()
         if not running(name) or not mount or Path(mount).resolve() != root.resolve():
             raise ValueError("Could not confirm the repaired directory is mounted at /AMP")
-    print("SE2_TEMPLATE_V5_OK (" + ("panel running" if was_running else "offline instance") + ")")
+    print("SE2_TEMPLATE_V6_OK (" + ("panel running" if was_running else "offline instance") + ")")
     if migrate_local_source:
         print(f"{name}: Meta.OriginalSource={PUBLIC_SOURCE}")
 

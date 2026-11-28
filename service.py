@@ -248,7 +248,7 @@ def supervise(child, state_dir, commands, console_offset):
 
 
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "--check-addons":
+    if len(sys.argv) == 3 and sys.argv[1] in ("--check-addons", "--update-addons"):
         rows = panel_addons.check(Path(sys.argv[2]).resolve(), force=True)
         panel_addons.notice(f"Sprawdzono listę ({len(rows)}). Gotowa do startu gry.")
         return 0
@@ -266,7 +266,7 @@ def main():
         stamp = listfile.read_bytes() if listfile.is_file() else b""
         addons = panel_addons.check(root)
         plugin_profile = panel_addons.pulsar_profile(root, addons)
-        native_plugins = panel_addons.native_plugins(root, addons)
+        native_plugins = [panel_addons.plugin_path(root, row) for row in addons if "manifest" in row]
         config = configure(root, int(sys.argv[1]), int(sys.argv[2]), os.environ, addons)
         for name in ("dedicated-command.txt", "dedicated-status.json"):
             p = state_dir / name

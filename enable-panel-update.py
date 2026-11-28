@@ -26,7 +26,7 @@ def needs_change(data, stages):
     current = json.loads(setting(data)[1])
     if current == stages:
         return False
-    if current != []:
+    if current and current != stages[:2]:
         raise ValueError("Instance already has custom update stages; preserving them")
     return True
 
@@ -64,8 +64,8 @@ def main(instance):
     if cfg.stat().st_uid != os.geteuid() or not (game / "Game2/SpaceEngineers2.dll").is_file():
         raise ValueError("Run as the AMP account that owns this prepared SE2 instance")
     stages = json.loads(Path(__file__).with_name("y51-se2updates.json").read_bytes())
-    if [s["UpdateSource"] for s in stages] != ["FetchURL", "Executable"]:
-        raise ValueError("Expected the Y51 FetchURL and Executable stages")
+    if [s["UpdateSource"] for s in stages] != ["FetchURL", "Executable", "FetchURL", "Executable", "Executable"]:
+        raise ValueError("Expected the Y51 and SE2 add-on update stages")
 
     container = f"AMP_{instance}"
     was_running = running(container)

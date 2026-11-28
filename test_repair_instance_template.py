@@ -1,5 +1,5 @@
 import codecs
-import fcntl
+import os
 import json
 from pathlib import Path
 import shutil
@@ -42,12 +42,15 @@ class TemplateRepairTests(unittest.TestCase):
         self.assertNotIn(b"\n", data.replace(b"\r\n", b""))
         new = m.kvp(data.decode("utf-8-sig"))
         old = m.kvp(self.old.decode("utf-8-sig"))
-        for unchanged in ("App.AppSettings", "App.Ports", "Meta.OriginalSource", "App.UpdateSources"):
+        for unchanged in ("App.AppSettings", "App.Ports", "Meta.OriginalSource"):
             self.assertEqual(new[unchanged], old[unchanged])
+        steps = json.loads(new["App.UpdateSources"])
+        self.assertEqual(steps[0], {"UpdateStageName": "local updater"})
+        self.assertIn("--update-addons", steps[-1]["UpdateSourceArgs"])
         env = json.loads(new["App.EnvironmentVariables"])
         self.assertEqual({k: env[k] for k in self.env}, self.env)
         self.assertEqual(env["SE2_STREAMING_RADIUS_METERS"], "{{StreamingRadiusMeters}}")
-        self.assertEqual(new["Meta.ConfigVersion"], "5")
+        self.assertEqual(new["Meta.ConfigVersion"], "6")
         self.assertIn(m.LAUNCHER, new["App.CommandLineArgs"])
         fields = {r["FieldName"] for r in json.loads(self.manifest.read_bytes())}
         self.assertTrue({"WorldSaveRequest", "PanelAddons", "LocalSetting"} <= fields)
@@ -56,7 +59,7 @@ class TemplateRepairTests(unittest.TestCase):
         self.assertEqual((self.game / m.LAUNCHER).read_bytes(), (m.SOURCE / "updates" / m.LAUNCHER).read_bytes())
         self.assertEqual(m.plan(self.root), {})
         m.install(self.root, m.plan(self.root))
-        backup, = self.root.glob(".before-se2-panel-v5-*")
+        backup, = self.root.glob(".before-se2-panel-v6-*")
         self.assertEqual((backup / "GenericModule.kvp").read_bytes(), self.old)
 
     def test_partial_write_rolls_back_existing_and_new_files(self):
@@ -93,9 +96,9 @@ class TemplateRepairTests(unittest.TestCase):
             effective = m.kvp(self.kvp.read_text(encoding="utf-8-sig"))
             self.assertEqual(effective["Meta.OriginalSource"], m.PUBLIC_SOURCE)
             self.assertEqual(effective["App.AppSettings"], m.kvp(original.decode("utf-8-sig"))["App.AppSettings"])
-            self.assertEqual(effective["Meta.ConfigVersion"], "5")
+            self.assertEqual(effective["Meta.ConfigVersion"], "6")
             self.assertEqual(m.plan(self.root, True), {})
-            backup, = self.root.glob(".before-se2-panel-v5-*")
+            backup, = self.root.glob(".before-se2-panel-v6-*")
             self.assertEqual((backup / "GenericModule.kvp").read_bytes(), original)
             self.kvp.write_bytes(original.replace(template["Meta.AppConfigId"].encode(), b"other"))
             with self.assertRaisesRegex(ValueError, "application IDs"):
@@ -104,7 +107,9 @@ class TemplateRepairTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "original LOCAL"):
                 m.plan(self.root, True)
 
+    @unittest.skipUnless(os.name == "posix", "Linux AMP instance lock")
     def test_live_game_blocks_before_stopping_panel(self):
+        import fcntl
         with (
             (self.game / "state/.amp.lock").open("a") as lock,
             patch.object(m, "running", return_value=True),
@@ -116,6 +121,7 @@ class TemplateRepairTests(unittest.TestCase):
             run.assert_not_called()
         self.assertEqual(self.kvp.read_bytes(), self.old)
 
+    @unittest.skipUnless(os.name == "posix", "Linux AMP instance lock")
     def test_restore_running_panel_and_verify_mount_after_reloading(self):
         with (
             patch.object(m, "running", side_effect=[True, False, True]),
@@ -126,6 +132,7 @@ class TemplateRepairTests(unittest.TestCase):
         self.assertEqual([args[0][0] for args in run.call_args_list],
                          [["ampinstmgr", "-q", self.root.name], ["ampinstmgr", "-s", self.root.name]])
 
+    @unittest.skipUnless(os.name == "posix", "Linux AMP instance lock")
     def test_offline_panel_stays_offline(self):
         with patch.object(m, "running", return_value=False), patch.object(m.subprocess, "run") as run:
             m.repair(self.root.name, self.root.parent)

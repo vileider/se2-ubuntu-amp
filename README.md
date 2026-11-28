@@ -12,7 +12,9 @@ The original deployment hosted a world in Docker, accepted an in-game LAN connec
 
 ## Add mods and plugins from AMP
 
-For an existing instance using the public template, save and stop the game. In ADS choose **Configuration → Instance Deployment → Fetch Latest**, then return to **Instances** and click the download-arrow button labelled **Update Instance** on the **SE2 instance tile**. If ADS asks, confirm **Shutdown and Update**. Wait for the task to finish before reopening the instance. Open the instance and start the game. On first start AMP stages the Python add-on manager and checks its SHA-256. This feature works with the existing Linux image. **Status → Update** inside SE2 continues to update the Y51 game plugin.
+Save and stop the game before applying template v6. In ADS, open **Configuration → Instance Deployment**, make sure **Configuration Repositories** includes `vileider/se2-ubuntu-amp:main`, and click **Fetch Latest**. In **Instances**, use **Update Instance** on the SE2 tile, or **Refresh Configuration** in its context menu if available. Once the task finishes, reopen the instance. **Configuration → Space Engineers 2** contains the horizontal tabs **Serwer**, **Świat** and **Dodatki**. This template uses the existing Docker image.
+
+If ADS cannot find the template under `--main` or your existing instance uses the local KntSE2 template, you can recover using the **ADS File Manager**. Download [the offline v6 recovery page](updates/repair-panel-v6.html) with GitHub's **Download raw file**, open it locally, and follow the instructions using the three current configuration files from your stopped instance. It builds a ZIP on your computer, preserving the instance settings, and includes the verified launcher. After applying it, add and update mods directly inside the instance.
 
 If ADS reports `DeploymentTemplates/--main/y51-se2config.json` during **Update Instance**, stop the game and wait for its final save, then run the following on the Ubuntu host. Replace `MySE201` with the existing instance directory name.
 
@@ -22,17 +24,31 @@ sudo -u amp git -C "$t" pull --ff-only origin main &&
   sudo -iu amp python3 "$t/repair_instance_template.py" MySE201
 ```
 
-The helper backs up changed panel files in the reported directory and checks the installed controls and launcher. It restores a running panel after the repair. After `SE2_TEMPLATE_V5_OK`, reopen the instance (start its panel from ADS first if it was offline).
+The helper backs up changed panel files in the reported directory and checks the installed controls and launcher. It restores a running panel after the repair. After `SE2_TEMPLATE_V6_OK`, reopen the instance (start its panel from ADS first if it was offline).
 
 For an instance whose `Meta.OriginalSource` is `LOCAL-KntSE2-main`, append `--migrate-local-source` to the repair command above. Run it from the existing public ADS template checkout. This also updates the instance's source setting and checks it after restarting the panel.
 
 To select a saved world in this instance, set **Świat startowy** to **Istniejący zapis z profilu** and enter its folder name under **Nazwa świata**. For the November test use `Witamy na Verdure november`. The launcher checks the save in `profile/AppData/SaveGames` before asking Y51 to open it.
 
-1. Open **Configuration → Dodatki → Mody Steam i pluginy GitHub**. Click **+**, paste a Steam Workshop mod link or item ID, or the GitHub repository URL for a plugin in Pulsar's **PluginHub-SE2**. Save the list. Remove an entry with the list's delete control.
-2. With the game running, open **Console**. The manager checks the saved list and reports the title as soon as the source answers, or explains the failure. With the game stopped the check runs at startup. **Znaleziono** confirms the catalog entry. Linux headless compatibility still depends on the plugin. Private items, blueprints, Workshop collections, Windows-only plugins and arbitrary GitHub repositories are outside this manager's supported inputs.
-3. For the Verdure 9P server plugin, paste `https://github.com/vileider/se2-verdure-planets` in this same list. The launcher checks the DLL against the packaged SHA-256 on every start. The plugin requests its New Planet dependency from Workshop.
+1. In **Configuration → Space Engineers 2 → Dodatki**, find **Mody Steam i pluginy GitHub**. Click **+**, paste one public GitHub repository URL, Steam Workshop mod URL or SE2 Workshop ID per entry, then save the list.
+2. With the game stopped, **Status → Update** runs the Y51 updater and refreshes the selected server DLLs. Click **Start** once the update finishes. Startup also installs newly selected add-ons. Ordinary restarts reuse the verified versions on disk. Removing an entry and restarting removes it from the launch arguments.
+3. The game console reports the resolved names and any failed checks. A failed server DLL update leaves the previous verified selection available for the next start.
 
-   Restart the game when ready. Y51 downloads Workshop mods and reports world mods through the existing **mods** console command. For GitHub entries, Pulsar uses the selected PluginHub IDs in a copy of the current profile. Its loader reports enabled plugins, initialization counts and errors to the AMP console. A GitHub plugin that adds client UI may also need installing on each player's PC.
+### Publish a server add-on
+
+Create a separate public GitHub repo for the mod. Commit its Linux-headless-compatible SE2 plugin DLL and a UTF-8 file named `se2-addon.json` at the root of its default branch. Publish them together. An existing template v6 instance can install the mod directly from its repository URL.
+
+```json
+{
+  "schema": 1,
+  "name": "Example plugin",
+  "version": "1.0.0",
+  "dll": "dist/1.0.0/Example.dll",
+  "sha256": "<64 lowercase hexadecimal digits from sha256sum>"
+}
+```
+
+Use a repo-relative DLL path, publish one DLL per manifest (up to 4 MiB), and keep each version at its own path. Select only repositories whose owners you trust to run code on your server. SHA-256 verifies the downloaded bytes against the author's manifest. When releasing a new version, update the version, path and digest. Steam items go through Y51. GitHub repos without a native manifest can be resolved through Pulsar PluginHub-SE2. The original Verdure 9P package retains its v5 pin for compatibility.
 
 The list manages its own selections. Existing manual settings and the original Pulsar profile are preserved. Y51 also loads mods embedded in a world save, so removing a Workshop entry from the panel alone may leave that mod active in an existing world.
 

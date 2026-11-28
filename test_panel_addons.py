@@ -33,51 +33,95 @@ def registry(xml=HUB_XML):
 
 
 class AddonTests(unittest.TestCase):
-    def test_verdure_link_installs_verified_dll_and_restarts_offline(self):
+    def test_manifest_install_update_rollback_and_offline_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / addons.LIST).write_text(f"https://github.com/{addons.VERDURE_REPO}")
-            data = b"test server plugin"
-            with patch.object(addons, "VERDURE_SHA256", addons.hashlib.sha256(data).hexdigest()), \
-                 patch.object(addons, "fetch", side_effect=[data, b"wrong"]) as fetch:
+            repos = ["first/new-mod", "second/another-mod"]
+            (root / addons.LIST).write_text("\n".join("https://github.com/" + repo for repo in repos))
+            def manifest(data, version):
+                return json.dumps({"schema": 1, "name": "Demo", "version": version,
+                                   "dll": f"dist/{version}/Shared.dll",
+                                   "sha256": addons.hashlib.sha256(data).hexdigest()}).encode()
+            payloads = [b"mod A", b"mod B"]
+            answers = [manifest(data, "1") for data in payloads] + payloads
+            with patch.object(addons, "fetch", side_effect=answers):
                 rows = addons.check(root)
-                self.assertIsNone(addons.pulsar_profile(root, rows))
-                [dll] = addons.native_plugins(root, rows)
-                self.assertEqual(dll.read_bytes(), data)
-                self.assertEqual(addons.native_plugins(root, addons.check(root)), [dll])
-                self.assertEqual(fetch.call_count, 1)
-                dll.write_bytes(b"corrupt")
+            self.assertIsNone(addons.pulsar_profile(root, rows))
+            with patch.object(addons, "fetch", side_effect=AssertionError("network on restart")):
+                paths = addons.native_plugins(root, addons.check(root))
+                self.assertEqual([p.read_bytes() for p in paths], payloads)
+            cache = root / "state/amp-addons-cache.json"
+            before = cache.read_bytes()
+            with patch.object(addons, "fetch", side_effect=[manifest(b"new", "2"), manifest(b"B2", "2"), b"new", b"bad"]):
                 with self.assertRaisesRegex(ValueError, "SHA-256"):
-                    addons.native_plugins(root, rows)
-                self.assertEqual(dll.read_bytes(), b"corrupt")
-                self.assertEqual(addons.native_plugins(root, []), [])
+                    addons.check(root, force=True)
+            self.assertEqual(cache.read_bytes(), before)
+            with patch.object(addons, "fetch", side_effect=[manifest(b"new", "2"), manifest(b"B2", "2"), b"B2"]):
+                upgraded = addons.check(root, force=True)
+            self.assertEqual([p.read_bytes() for p in addons.native_plugins(root, upgraded)], [b"new", b"B2"])
+            self.assertEqual([p.read_bytes() for p in paths], payloads)
+            (root / "home/.steam/sdk64").mkdir(parents=True)
+            with patch.object(service.subprocess, "Popen") as popen:
+                service.launch(root, root / "server.json", None, paths)
+                expected = ";".join(map(str, [root / "Plugin/Y51_SE2Online.dll", *paths]))
+                self.assertIn("-plugins:" + expected, popen.call_args.args[0])
+
+    def test_v5_verdure_pin_migrates_offline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = b"old installed library"
+            (root / addons.LIST).write_text("https://github.com/" + addons.VERDURE_REPO)
+            old = root / "state/amp-plugins" / addons.VERDURE_DLL
+            old.parent.mkdir(parents=True)
+            old.write_bytes(data)
+            row = {"source": "github", "key": addons.VERDURE_REPO, "id": addons.VERDURE_DLL, "name": "Verdure"}
+            (root / "state/amp-addons-cache.json").write_text(json.dumps([row]))
+            with patch.object(addons, "fetch", side_effect=AssertionError("network on migration")), \
+                 patch.object(addons, "VERDURE_SHA256", addons.hashlib.sha256(data).hexdigest()):
+                [installed] = addons.native_plugins(root, addons.check(root))
+                self.assertEqual(installed.read_bytes(), data)
+
+    def test_invalid_manifest_never_falls_back_to_pulsar(self):
+        entry = {"schema": 1, "name": "Demo", "version": "1", "dll": "mod.dll", "sha256": "0"*64}
+        for change in ({"schema": True}, {"version": 3}, {"sha256": ""}, {"dll": "../x.dll"},
+                       {"dll": "https://elsewhere/x.dll"}, {"dll": "x;other.dll"}, {"dll": "do.sh"}):
+            with self.subTest(change=change), patch.object(addons, "fetch", return_value=json.dumps({**entry, **change})), \
+                 patch.object(addons, "hub_plugins", side_effect=AssertionError), self.assertRaises(ValueError):
+                addons.resolve([("github", "third/mod")])
 
     def test_panel_json_and_published_launcher(self):
         cfg = json.loads((ROOT / "y51-se2config.json").read_bytes())
+        self.assertEqual({r["Category"] for r in cfg}, {"Space Engineers 2:rocket_launch"})
+        self.assertEqual({r["Subcategory"] for r in cfg}, {"Serwer:dns:1", "Świat:public:2", "Dodatki:extension:3"})
         self.assertEqual(next(row["Special"] for row in cfg if row["FieldName"] == "PanelAddons"),
                          f"listfile:./SpaceEngineers2/{addons.LIST}")
-        with zipfile.ZipFile(ROOT / "updates/se2-panel-v3.pyz") as z:
+        with zipfile.ZipFile(ROOT / "updates/se2-panel-v4.pyz") as z:
             for name, source in [("__main__.py", "service.py"), ("panel_addons.py", "panel_addons.py")]:
                 self.assertEqual(z.read(name), (ROOT / source).read_bytes())
         with tempfile.TemporaryDirectory() as tmp:
-            output = subprocess.check_output([sys.executable, "-I", "-X", "utf8", str(ROOT / "updates/se2-panel-v3.pyz"),
+            output = subprocess.check_output([sys.executable, "-I", "-X", "utf8", str(ROOT / "updates/se2-panel-v4.pyz"),
                                               "--check-addons", tmp], encoding="utf-8")
             self.assertIn("Sprawdzono listę (0)", output)
 
-    def test_amp_start_validates_pinned_artifact_and_update_only_handles_y51(self):
+    def test_start_and_cold_update_validate_and_run_bundle(self):
         kvp = (ROOT / "y51-se2.kvp").read_text()
         self.assertIn("App.PreStartStages=@IncludeJson[y51-se2start.json]", kvp)
-        self.assertIn("App.CommandLineArgs=-I -u ./se2-panel-v3.pyz ", kvp)
+        self.assertIn("App.CommandLineArgs=-I -u ./se2-panel-v4.pyz ", kvp)
         stages = json.loads((ROOT / "y51-se2start.json").read_bytes())
-        self.assertRegex(stages[0]["UpdateSourceData"], r"/[0-9a-f]{40}/updates/se2-panel-v3[.]pyz$")
+        self.assertRegex(stages[0]["UpdateSourceData"], r"/[0-9a-f]{40}/updates/se2-panel-v4[.]pyz$")
         update = json.loads((ROOT / "y51-se2updates.json").read_bytes())
-        self.assertEqual([item["UpdateSource"] for item in update], ["FetchURL", "Executable"])
+        self.assertEqual(update[2], {**stages[0], "OverwriteExistingFiles": True})
+        self.assertEqual(update[3], stages[1])
+        self.assertTrue(all(not s["SkipOnFailure"] for s in update))
         with tempfile.TemporaryDirectory(prefix="amp path ") as tmp:
             name = stages[0]["UpdateSourceArgs"]
             deployed = Path(tmp) / name
             shutil.copyfile(ROOT / "updates" / name, deployed)
             args = shlex.split(stages[1]["UpdateSourceArgs"].replace("{{$FullBaseDir}}", tmp+"/"))
             subprocess.run([sys.executable, *args], check=True)
+            args = shlex.split(update[-1]["UpdateSourceArgs"].replace("{{$FullBaseDir}}", tmp+"/"))
+            subprocess.run([sys.executable, *args], check=True)
+            args = shlex.split(stages[1]["UpdateSourceArgs"].replace("{{$FullBaseDir}}", tmp+"/"))
             deployed.write_bytes(b"incomplete")
             result = subprocess.run([sys.executable, *args], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
@@ -88,10 +132,10 @@ class AddonTests(unittest.TestCase):
             root = Path(tmp)
             selection = root / addons.LIST
             selection.write_text("11\nhttps://steamcommunity.com/sharedfiles/filedetails/?id=11\nhttps://github.com/Example/Addon\n")
-            with patch.object(addons, "fetch", side_effect=[workshop(), registry()]) as fetch:
+            with patch.object(addons, "fetch", side_effect=[workshop(), addons.MissingFile(), registry()]) as fetch:
                 rows = addons.check(root)
                 self.assertEqual(addons.check(root), rows)
-                self.assertEqual(fetch.call_count, 2)
+                self.assertEqual(fetch.call_count, 3)
             self.assertIn("Test mod", out.getvalue())
             self.assertIn("Test plugin", out.getvalue())
             profile = root / "pulsar/Modern/Profiles/Current.xml"
@@ -132,7 +176,7 @@ class AddonTests(unittest.TestCase):
             listing.write_text("https://github.com/Example/Addon")
             for data in [registry(HUB_XML.replace(b"</PluginData>", b"<Platforms>Windows</Platforms></PluginData>")),
                          registry(HUB_XML.replace(b"Example/Addon", b"Other/Addon"))]:
-                with patch.object(addons, "fetch", return_value=data), self.assertRaises(ValueError):
+                with patch.object(addons, "fetch", side_effect=[addons.MissingFile(), data]), self.assertRaises(ValueError):
                     addons.check(root)
             self.assertEqual(cache.read_bytes(), previous)
 
